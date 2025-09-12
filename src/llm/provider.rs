@@ -10,6 +10,7 @@ use crate::llm::{
     anthropic::AnthropicProvider,
     ollama::OllamaProvider,
     azure::AzureProvider,
+    gemini::{GeminiProvider, GeminiConfig},
 };
 
 /// Trait for LLM providers
@@ -57,6 +58,17 @@ impl ProviderFactory {
                 let provider = AzureProvider::from_config(config)?;
                 Ok(Box::new(provider))
             }
+            "gemini" => {
+                let api_key = config.api_key.ok_or_else(|| 
+                    LlmError::ConfigError("Gemini API key is required".to_string()))?;
+                let gemini_config = GeminiConfig {
+                    api_key,
+                    model: config.model,
+                };
+                let provider = GeminiProvider::new(gemini_config)
+                    .map_err(|e| LlmError::ConfigError(e.to_string()))?;
+                Ok(Box::new(provider))
+            }
             _ => Err(LlmError::ConfigError(format!(
                 "Unsupported provider type: {}",
                 config.provider_type
@@ -66,7 +78,7 @@ impl ProviderFactory {
     
     /// Get available provider types
     pub fn available_providers() -> Vec<&'static str> {
-        vec!["openai", "anthropic", "ollama", "azure"]
+        vec!["openai", "anthropic", "ollama", "azure", "gemini"]
     }
 }
 

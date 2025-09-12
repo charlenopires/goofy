@@ -10,8 +10,11 @@ pub mod openai;
 pub mod anthropic;
 pub mod azure;
 pub mod ollama;
+pub mod gemini;
 pub mod errors;
 pub mod tools;
+pub mod prompt;
+pub mod agent;
 
 pub use provider::*;
 pub use types::*;
