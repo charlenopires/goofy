@@ -8,7 +8,7 @@ pub mod lsp;
 pub mod advanced;
 
 use self::lsp::LspConfig;
-pub use advanced::*;
+// pub use advanced::*; // Commented out to avoid warnings
 
 /// Application configuration
 #[derive(Clone, Debug, Serialize, Deserialize, Default, JsonSchema)]

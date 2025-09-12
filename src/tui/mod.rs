@@ -60,6 +60,18 @@ pub async fn run() -> Result<()> {
     result
 }
 
+/// Run TUI with existing App instance
+pub async fn run_with_app(app: &mut crate::app::App) -> Result<()> {
+    let mut terminal = init_terminal()?;
+    let mut tui_app = App::new_with_backend(app).await?;
+    let mut event_handler = EventHandler::new();
+    
+    let result = run_app(&mut terminal, &mut tui_app, &mut event_handler).await;
+    
+    restore_terminal(&mut terminal)?;
+    result
+}
+
 /// Main application loop
 async fn run_app(
     terminal: &mut Terminal<Backend>,

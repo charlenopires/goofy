@@ -18,7 +18,71 @@ use ratatui::{
 use std::time::{Duration, Instant};
 
 use crate::tui::themes::Theme;
-use crate::tui::components::animations::{AnimationState, Easing, Timeline};
+// Temporarily removed animation dependencies
+// use crate::tui::components::animations::{AnimationState, Easing, Timeline};
+
+// Simple animation state for compatibility
+#[derive(Debug, Clone, PartialEq)]
+pub enum AnimationState {
+    Idle,
+    Running { start_time: Instant, current_frame: u32 },
+    Complete,
+}
+
+impl AnimationState {
+    pub fn new() -> Self {
+        Self::Idle
+    }
+    
+    pub fn is_active(&self) -> bool {
+        matches!(self, AnimationState::Running { .. })
+    }
+    
+    pub fn update(&mut self, _delta_time: Duration) {
+        // Simple implementation
+    }
+    
+    pub fn progress(&self) -> f32 {
+        match self {
+            AnimationState::Idle => 0.0,
+            AnimationState::Running { current_frame, .. } => {
+                (*current_frame as f32 / 60.0).min(1.0)
+            }
+            AnimationState::Complete => 1.0,
+        }
+    }
+}
+
+// Simple easing type for compatibility
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Easing {
+    Linear,
+    EaseOut,
+}
+
+impl Easing {
+    pub fn apply(self, t: f32) -> f32 {
+        match self {
+            Easing::Linear => t,
+            Easing::EaseOut => 1.0 - (1.0 - t) * (1.0 - t),
+        }
+    }
+}
+
+// Simple timeline for compatibility
+pub struct Timeline {
+    _placeholder: (),
+}
+
+impl Timeline {
+    pub fn new() -> Self {
+        Self { _placeholder: () }
+    }
+    
+    pub fn update(&mut self, _delta_time: Duration) {
+        // Simple implementation
+    }
+}
 
 /// Enhanced visual components with polish and animations
 pub struct PolishEngine {
@@ -406,9 +470,9 @@ impl PolishEngine {
         let spinner_chars = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
         let index = (loading.phase * spinner_chars.len() as f32) as usize % spinner_chars.len();
         
-        let text = format!("{} {}", spinner_chars[index], loading.text);
-        let paragraph = Paragraph::new(text)
-            .style(Style::default().fg(self.theme.accent_primary))
+        let text_str = format!("{} {}", spinner_chars[index], loading.text);
+        let paragraph = Paragraph::new(text_str)
+            .style(Style::default().fg(self.theme.accent))
             .alignment(Alignment::Center);
         
         frame.render_widget(paragraph, loading.position);
@@ -418,8 +482,8 @@ impl PolishEngine {
     fn render_progress_bar(&self, frame: &mut Frame, loading: &LoadingIndicator) {
         let progress = (loading.progress * 100.0) as u16;
         let gauge = Gauge::default()
-            .block(Block::default().title(&loading.text).borders(Borders::ALL))
-            .gauge_style(Style::default().fg(self.theme.accent_primary))
+            .block(Block::default().title(loading.text.as_str()).borders(Borders::ALL))
+            .gauge_style(Style::default().fg(self.theme.accent))
             .percent(progress);
         
         frame.render_widget(gauge, loading.position);
@@ -431,8 +495,8 @@ impl PolishEngine {
         let dots = ".".repeat(dots_count);
         let text = format!("{}{}", loading.text, dots);
         
-        let paragraph = Paragraph::new(text)
-            .style(Style::default().fg(self.theme.fg_primary))
+        let paragraph = Paragraph::new(text.as_str())
+            .style(Style::default().fg(self.theme.fg_base))
             .alignment(Alignment::Center);
         
         frame.render_widget(paragraph, loading.position);
@@ -444,7 +508,7 @@ impl PolishEngine {
         let color = Color::Rgb(intensity as u8, intensity as u8, intensity as u8);
         
         let block = Block::default()
-            .title(&loading.text)
+            .title(loading.text.as_str())
             .borders(Borders::ALL)
             .style(Style::default().fg(color));
         
@@ -463,8 +527,8 @@ impl PolishEngine {
         }
         
         let text = format!("{} {}", loading.text, wave_text);
-        let paragraph = Paragraph::new(text)
-            .style(Style::default().fg(self.theme.accent_primary))
+        let paragraph = Paragraph::new(text.as_str())
+            .style(Style::default().fg(self.theme.accent))
             .alignment(Alignment::Center);
         
         frame.render_widget(paragraph, loading.position);
@@ -495,19 +559,19 @@ impl PolishEngine {
     /// Render individual notification
     fn render_notification(&self, frame: &mut Frame, notification: &Notification, area: Rect) {
         let (border_color, icon) = match notification.notification_type {
-            NotificationType::Info => (self.theme.info_primary, "ℹ"),
-            NotificationType::Success => (self.theme.success_primary, "✓"),
-            NotificationType::Warning => (self.theme.warning_primary, "⚠"),
-            NotificationType::Error => (self.theme.error_primary, "✗"),
+            NotificationType::Info => (self.theme.info, "ℹ"),
+            NotificationType::Success => (self.theme.success, "✓"),
+            NotificationType::Warning => (self.theme.warning, "⚠"),
+            NotificationType::Error => (self.theme.error, "✗"),
         };
         
         let text = format!("{} {}", icon, notification.message);
         let block = Block::default()
             .borders(Borders::ALL)
             .border_style(Style::default().fg(border_color))
-            .style(Style::default().bg(self.theme.bg_surface));
+            .style(Style::default().bg(self.theme.bg_subtle));
         
-        let paragraph = Paragraph::new(text)
+        let paragraph = Paragraph::new(text.as_str())
             .block(block)
             .wrap(Wrap { trim: true });
         
@@ -703,7 +767,7 @@ impl SmoothScrollState {
         }
         
         let t = elapsed.as_secs_f32() / self.duration.as_secs_f32();
-        let eased_t = Easing::EaseOutCubic.apply(t);
+        let eased_t = Easing::EaseOut.apply(t);
         
         let start_value = self.current;
         self.current = start_value + (self.target - start_value) * eased_t;

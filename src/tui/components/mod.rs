@@ -1,14 +1,15 @@
-// TODO: Re-enable these modules after fixing theme compatibility
-// pub mod chat;
-// pub mod core;
-// pub mod dialogs;
-// TODO: Re-enable these modules after fixing theme compatibility
-// pub mod list;
-// pub mod input;
-// pub mod logo;
-// pub mod splash;
-// pub mod status;
+// Core components
+pub mod chat;
+pub mod core;
+pub mod dialogs;
+pub mod list;
+pub mod input;
+pub mod logo;
+pub mod splash;
+pub mod status;
 
+// Advanced components
+pub mod animations;
 pub mod completions;
 pub mod files;
 pub mod lists;

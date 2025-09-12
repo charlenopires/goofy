@@ -13,7 +13,7 @@ use ratatui::{
 use std::time::{Duration, Instant};
 
 /// Different spinner styles available
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum SpinnerStyle {
     /// Classic dots spinner: ⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏
     Dots,

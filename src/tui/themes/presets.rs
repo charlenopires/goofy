@@ -135,7 +135,7 @@ pub fn classic_dark() -> Theme {
         // Traditional text colors
         fg_base: Color::White,
         fg_muted: Color::Gray,
-        fg_half_muted: Color::LightGray,
+        fg_half_muted: Color::Gray,
         fg_subtle: Color::DarkGray,
         fg_selected: Color::Black,
         
@@ -180,15 +180,15 @@ pub fn classic_light() -> Theme {
         
         // Light backgrounds
         bg_base: Color::White,
-        bg_base_lighter: Color::LightGray,
+        bg_base_lighter: Color::Gray,
         bg_subtle: Color::Gray,
-        bg_overlay: Color::LightGray,
+        bg_overlay: Color::Gray,
         
         // Dark text for contrast
         fg_base: Color::Black,
         fg_muted: Color::DarkGray,
         fg_half_muted: Color::Gray,
-        fg_subtle: Color::LightGray,
+        fg_subtle: Color::Gray,
         fg_selected: Color::White,
         
         // Light theme borders
@@ -238,7 +238,7 @@ pub fn high_contrast() -> Theme {
         
         // High contrast text
         fg_base: Color::White,
-        fg_muted: Color::LightGray,
+        fg_muted: Color::Gray,
         fg_half_muted: Color::Gray,
         fg_subtle: Color::DarkGray,
         fg_selected: Color::Black,
@@ -278,7 +278,7 @@ pub fn monochrome() -> Theme {
         
         // Grayscale brand colors with different intensities
         primary: Color::White,
-        secondary: Color::LightGray,
+        secondary: Color::Gray,
         tertiary: Color::Gray,
         accent: Color::DarkGray,
         
@@ -290,7 +290,7 @@ pub fn monochrome() -> Theme {
         
         // Monochrome text
         fg_base: Color::White,
-        fg_muted: Color::LightGray,
+        fg_muted: Color::Gray,
         fg_half_muted: Color::Gray,
         fg_subtle: Color::DarkGray,
         fg_selected: Color::Black,
@@ -301,21 +301,21 @@ pub fn monochrome() -> Theme {
         
         // Status colors using intensity
         success: Color::White,
-        error: Color::LightGray,
+        error: Color::Gray,
         warning: Color::Gray,
         info: Color::DarkGray,
         
         // Monochrome palette
         white: Color::White,
-        blue_light: Color::LightGray,
+        blue_light: Color::Gray,
         blue: Color::Gray,
-        yellow: Color::LightGray,
+        yellow: Color::Gray,
         green: Color::Gray,
         green_dark: Color::DarkGray,
-        green_light: Color::LightGray,
+        green_light: Color::Gray,
         red: Color::Gray,
         red_dark: Color::DarkGray,
-        red_light: Color::LightGray,
+        red_light: Color::Gray,
         cherry: Color::Gray,
         
         styles: None, // Built lazily
@@ -354,7 +354,7 @@ mod tests {
                 | Color::White | Color::LightRed | Color::LightGreen 
                 | Color::LightYellow | Color::LightBlue | Color::LightMagenta 
                 | Color::LightCyan | Color::Gray | Color::DarkGray 
-                | Color::LightGray | Color::Indexed(_) => {
+                | Color::Gray | Color::Indexed(_) => {
                     // Valid color
                 }
             }

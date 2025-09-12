@@ -1,15 +1,18 @@
-# Goofy
+# Goofy 🤪
 
-A Rust port of [Charmbracelet's Crush](https://github.com/charmbracelet/crush) - a terminal-based AI coding assistant.
+A comprehensive Rust port of [Charmbracelet's Crush](https://github.com/charmbracelet/crush) - a powerful terminal-based AI coding assistant with advanced TUI and multi-provider support.
 
-## Features
+## ✨ Features
 
-- **Multi-LLM Support**: Works with OpenAI, Anthropic, and local Ollama models
-- **Interactive TUI**: Modern terminal interface built with Ratatui
-- **Session Management**: Persistent conversation history with SQLite
-- **File System Integration**: Intelligent workspace traversal and file handling
-- **Streaming Responses**: Real-time AI responses with proper error handling
-- **Configuration Management**: JSON config files and environment variables
+- **🤖 Multi-LLM Support**: Seamless integration with OpenAI (GPT-4/3.5), Anthropic (Claude), Azure OpenAI, and local Ollama models
+- **🎨 Advanced TUI**: Beautiful terminal interface with themes, animations, and rich components
+- **💾 Session Management**: Persistent conversation history with SQLite backend
+- **🛠️ Comprehensive Tools**: File operations, bash execution, code editing, grep search, and more
+- **📁 File System Integration**: Smart workspace navigation with permission management
+- **⚡ Streaming Responses**: Real-time AI responses with proper error handling
+- **🎯 Smart Completions**: Context-aware autocompletion for commands and text
+- **🔐 Security First**: Permission system for file and command execution
+- **⚙️ Flexible Configuration**: JSON config files, environment variables, and CLI arguments
 
 ## Installation
 
@@ -170,37 +173,141 @@ cp goofy.example.json goofy.json
 
 ## Usage
 
-### Interactive Mode
+### Interactive Mode (TUI)
 
-Start the TUI interface:
+Start the interactive terminal interface:
 
 ```bash
+# Start interactive TUI
+goofy
+
+# Or with full path if not installed globally
 ./target/release/goofy
 ```
 
+**TUI Features:**
+- 📝 **Chat Interface**: Interactive conversation with AI assistant
+- 🎨 **Themes**: Dark/Light/High-contrast themes available
+- ⌨️ **Keyboard Shortcuts**:
+  - `Ctrl+C` or `Ctrl+Q`: Quit the application
+  - `Ctrl+G`: Show help
+  - `Enter`: Send message
+  - `↑/↓`: Scroll through message history
+  - `Home/End`: Jump to beginning/end of input
+
 ### Non-Interactive Mode
 
-Run single prompts:
+Run single prompts from the command line:
 
 ```bash
-# Direct prompt
-./target/release/goofy run "Explain Rust ownership"
+# Basic usage
+goofy run "Explain Rust ownership"
 
-# From stdin
-echo "Generate a binary search function in Rust" | ./target/release/goofy run
+# With specific provider and model
+GOOFY_PROVIDER=openai GOOFY_MODEL=gpt-4 goofy run "Write a binary search in Rust"
 
-# Quiet mode (no spinner)
-./target/release/goofy run --quiet "Review this code"
+# Using Anthropic Claude
+GOOFY_PROVIDER=anthropic GOOFY_MODEL=claude-3-opus-20240229 goofy run "Explain async/await"
 
 # Using Ollama (local models)
-GOOFY_PROVIDER=ollama GOOFY_MODEL=llama3.2 ./target/release/goofy run "Explain closures in Rust"
+GOOFY_PROVIDER=ollama GOOFY_MODEL=llama3.2 goofy run "What is a closure?"
+
+# From stdin
+echo "Generate unit tests for this function" | goofy run
+
+# Quiet mode (no spinner or status messages)
+goofy run --quiet "Review this code"
+
+# With custom working directory
+goofy run --cwd /path/to/project "Analyze the codebase structure"
 ```
 
-### Options
+### Command Options
 
-- `--cwd <path>`: Set working directory
-- `--debug`: Enable debug logging
-- `--yolo`: Auto-accept all permissions (dangerous!)
+```bash
+goofy [OPTIONS] [COMMAND]
+
+Commands:
+  run     Run a single prompt non-interactively
+  help    Print help information
+
+Options:
+  --cwd <PATH>           Set working directory (default: current directory)
+  --debug                Enable debug logging (RUST_LOG=debug)
+  --yolo                 Auto-accept all permissions (⚠️ dangerous!)
+  --quiet, -q            Suppress status messages (non-interactive mode)
+  --profile              Enable performance profiling
+  -h, --help             Print help
+  -V, --version          Print version
+
+Examples:
+  # Interactive mode
+  goofy
+  
+  # Run a prompt
+  goofy run "Explain this code"
+  
+  # With environment configuration
+  GOOFY_PROVIDER=ollama GOOFY_MODEL=codellama goofy run "Optimize this function"
+  
+  # Debug mode
+  goofy --debug run "Debug this error"
+```
+
+### Environment Variables
+
+Configure Goofy behavior with environment variables:
+
+```bash
+# Provider selection
+export GOOFY_PROVIDER=openai          # Options: openai, anthropic, ollama, azure
+export GOOFY_MODEL=gpt-4              # Model name specific to provider
+
+# API Keys
+export OPENAI_API_KEY=sk-...          # For OpenAI
+export ANTHROPIC_API_KEY=sk-ant-...   # For Anthropic
+export AZURE_API_KEY=...              # For Azure OpenAI
+
+# Ollama configuration (no API key needed)
+export OLLAMA_HOST=http://localhost:11434  # Ollama server URL
+
+# Advanced settings
+export GOOFY_MAX_TOKENS=2000          # Max response tokens
+export GOOFY_TEMPERATURE=0.7          # Model temperature (0.0-2.0)
+export GOOFY_TOP_P=0.9                # Top-p sampling
+export GOOFY_STREAM=true              # Enable streaming responses
+
+# Logging
+export RUST_LOG=debug                 # Enable debug logging
+export GOOFY_PROFILE=true             # Enable performance profiling
+```
+
+### Configuration File
+
+Create a `goofy.json` or `.goofy.json` file for persistent configuration:
+
+```json
+{
+  "provider": "openai",
+  "model": "gpt-4",
+  "max_tokens": 2000,
+  "temperature": 0.7,
+  "top_p": 0.9,
+  "stream": true,
+  "yolo_mode": false,
+  "read_only": false,
+  "working_dir": ".",
+  "extra_headers": {},
+  "extra_body": {}
+}
+```
+
+Configuration priority (highest to lowest):
+1. Command-line arguments
+2. Environment variables
+3. Local config file (`./.goofy.json` or `./goofy.json`)
+4. Global config file (`~/.config/goofy/goofy.json`)
+5. Default values
 
 ## Architecture
 
@@ -225,23 +332,78 @@ GOOFY_PROVIDER=ollama GOOFY_MODEL=llama3.2 ./target/release/goofy run "Explain c
 
 ## Development
 
-### Running Tests
+### Building from Source
 
 ```bash
+# Clone the repository
+git clone https://github.com/yourusername/goofy.git
+cd goofy
+
+# Build in debug mode (faster compilation, slower runtime)
+cargo build
+
+# Build in release mode (optimized for production)
+cargo build --release
+
+# Run directly with cargo
+cargo run -- run "Hello, Goofy!"
+
+# Run tests
 cargo test
+
+# Run with debug logging
+RUST_LOG=debug cargo run -- run "test prompt"
+
+# Format code
+cargo fmt
+
+# Run linter
+cargo clippy
 ```
 
 ### Debug Logging
 
+Enable detailed logging for troubleshooting:
+
 ```bash
-RUST_LOG=debug ./target/release/goofy run "test prompt"
+# Set log level
+RUST_LOG=debug goofy run "test prompt"
+
+# Different log levels
+RUST_LOG=error     # Only errors
+RUST_LOG=warn      # Warnings and errors
+RUST_LOG=info      # Informational messages (default)
+RUST_LOG=debug     # Debug information
+RUST_LOG=trace     # Very detailed trace logs
+
+# Module-specific logging
+RUST_LOG=goofy::llm=debug,goofy::tui=trace goofy
 ```
 
-### Profiling
+### Performance Profiling
 
 ```bash
-GOOFY_PROFILE=true ./target/release/goofy
+# Enable profiling
+GOOFY_PROFILE=true goofy
+
 # Profile server runs on http://localhost:6060
+# Use with tools like pprof or flamegraph
+```
+
+### Testing Specific Providers
+
+```bash
+# Test OpenAI
+GOOFY_PROVIDER=openai GOOFY_MODEL=gpt-4 cargo run -- run "Test OpenAI"
+
+# Test Anthropic
+GOOFY_PROVIDER=anthropic GOOFY_MODEL=claude-3-opus-20240229 cargo run -- run "Test Claude"
+
+# Test Ollama (local)
+GOOFY_PROVIDER=ollama GOOFY_MODEL=llama3.2 cargo run -- run "Test Ollama"
+
+# Test Azure OpenAI
+GOOFY_PROVIDER=azure GOOFY_MODEL=gpt-4 cargo run -- run "Test Azure"
 ```
 
 ## Comparison to Original
@@ -279,7 +441,9 @@ MIT License - see original Charmbracelet Crush repository for details.
 
 ## Troubleshooting
 
-### API Key Issues
+### Common Issues and Solutions
+
+#### API Key Issues
 
 Ensure your API keys are properly set:
 
@@ -289,38 +453,105 @@ echo $OPENAI_API_KEY
 echo $ANTHROPIC_API_KEY
 
 # Test with debug logging
-RUST_LOG=debug ./target/release/goofy run "test"
+RUST_LOG=debug goofy run "test"
+
+# Verify API key format
+# OpenAI: Should start with "sk-"
+# Anthropic: Should start with "sk-ant-"
 ```
 
-### Ollama Issues
+#### Ollama Issues
 
 If using Ollama locally:
 
 ```bash
-# Check if Ollama is running
+# 1. Check if Ollama is installed
+which ollama
+
+# 2. Start Ollama service (if not running)
+ollama serve
+
+# 3. Check if Ollama is running
 curl http://localhost:11434/api/tags
 
-# Pull a model if needed
+# 4. List available models
+ollama list
+
+# 5. Pull a model if needed
 ollama pull llama3.2
+ollama pull codellama
+ollama pull mistral
 
-# Test Ollama integration
-GOOFY_PROVIDER=ollama GOOFY_MODEL=llama3.2 ./target/release/goofy run "Hello"
+# 6. Test Ollama integration
+GOOFY_PROVIDER=ollama GOOFY_MODEL=llama3.2 goofy run "Hello"
+
+# 7. If using custom Ollama host
+OLLAMA_HOST=http://192.168.1.100:11434 GOOFY_PROVIDER=ollama goofy run "test"
 ```
 
-### Build Issues
-
-Update dependencies:
+#### Build Issues
 
 ```bash
-cargo update
+# Clean build
+cargo clean
 cargo build --release
+
+# Update dependencies
+cargo update
+
+# Fix dependency conflicts
+rm Cargo.lock
+cargo build --release
+
+# Check for missing system dependencies (Linux)
+# Install build essentials if needed
+sudo apt-get install build-essential pkg-config libssl-dev
 ```
 
-### Database Issues
-
-Reset session database:
+#### Database Issues
 
 ```bash
+# Reset session database
 rm ~/.goofy/sessions.db
-./target/release/goofy run "test"  # Recreates database
+goofy run "test"  # Recreates database automatically
+
+# Check database location
+ls -la ~/.goofy/
+
+# Backup sessions before reset
+cp ~/.goofy/sessions.db ~/.goofy/sessions.db.backup
+```
+
+#### TUI Display Issues
+
+```bash
+# Check terminal capabilities
+echo $TERM
+
+# Try different terminal emulators
+# Recommended: iTerm2 (macOS), Alacritty, WezTerm, Windows Terminal
+
+# Force specific terminal type
+TERM=xterm-256color goofy
+
+# Disable mouse if causing issues
+# (Edit config or use environment variable when available)
+```
+
+#### Permission Issues
+
+```bash
+# If getting permission denied errors
+# Check file permissions
+ls -la ~/.goofy/
+
+# Fix permissions
+chmod 755 ~/.goofy
+chmod 644 ~/.goofy/sessions.db
+
+# For system-wide installation issues
+# Use user directory instead
+mkdir -p ~/.local/bin
+cp target/release/goofy ~/.local/bin/
+export PATH="$HOME/.local/bin:$PATH"
 ```

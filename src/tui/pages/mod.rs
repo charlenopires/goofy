@@ -1,5 +1,5 @@
-// TODO: Re-enable when chat components are fixed
-// pub mod chat;
+// Page modules
+pub mod chat;
 // TODO: Re-enable when components are fixed
 // pub mod home;
 // pub mod settings;
@@ -59,6 +59,12 @@ pub trait Page: Send + Sync {
     fn help_text(&self) -> Vec<(&str, &str)> {
         vec![]
     }
+    
+    /// Set focus state for the page
+    fn set_focus(&mut self, focus: bool);
+    
+    /// Check if the page has focus
+    fn has_focus(&self) -> bool;
 }
 
 /// Page manager for handling navigation between pages

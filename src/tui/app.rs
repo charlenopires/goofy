@@ -93,6 +93,36 @@ impl App {
         })
     }
     
+    /// Create a new TUI app connected to an existing backend App
+    pub async fn new_with_backend(backend: &crate::app::App) -> Result<Self> {
+        let (event_sender, event_receiver) = mpsc::unbounded_channel();
+        
+        let mut page_manager = PageManager::new();
+        
+        // Register chat page
+        use crate::tui::pages::chat::ChatPage;
+        page_manager.register_page(Box::new(ChatPage::new()));
+        page_manager.navigate_to("chat".to_string())?;
+        
+        let status = format!(
+            "Connected to {} ({})",
+            backend.llm_provider().name(),
+            backend.llm_provider().model()
+        );
+        
+        Ok(Self {
+            should_quit: false,
+            size: Rect::default(),
+            key_map: KeyMap::default(),
+            page_manager,
+            theme: presets::goofy_dark(),
+            status_message: Some(status),
+            config: AppConfig::default(),
+            event_sender,
+            event_receiver,
+        })
+    }
+    
     /// Handle incoming events
     pub async fn handle_event(&mut self, event: Event) -> Result<bool> {
         match event {
@@ -159,6 +189,11 @@ impl App {
     }
     
     /// Render the application UI
+    /// Helper method to get theme styles
+    fn theme_styles(&mut self) -> crate::tui::themes::Styles {
+        self.theme.styles().clone()
+    }
+    
     pub fn render(&mut self, frame: &mut Frame) {
         self.size = frame.size();
         
@@ -179,11 +214,11 @@ impl App {
             let empty_block = Block::default()
                 .borders(Borders::ALL)
                 .title("Crush Terminal")
-                .style(self.theme.styles.base);
+                .style(self.theme_styles().base);
             
             let empty_text = Paragraph::new("No active page")
                 .block(empty_block)
-                .style(self.theme.styles.text);
+                .style(self.theme_styles().text);
                 
             frame.render_widget(empty_text, chunks[0]);
         }
@@ -198,7 +233,7 @@ impl App {
     }
     
     /// Render the status bar
-    fn render_status_bar(&self, frame: &mut Frame, area: Rect) {
+    fn render_status_bar(&mut self, frame: &mut Frame, area: Rect) {
         let status_text = if let Some(ref message) = self.status_message {
             message.clone()
         } else {
@@ -209,24 +244,24 @@ impl App {
         };
         
         let status_paragraph = Paragraph::new(status_text)
-            .style(self.theme.styles.status_bar);
+            .style(self.theme_styles().base);
             
         frame.render_widget(status_paragraph, area);
     }
     
     /// Render help overlay
-    fn render_help_overlay(&self, frame: &mut Frame) {
+    fn render_help_overlay(&mut self, frame: &mut Frame) {
         let help_area = centered_rect(60, 50, frame.size());
         
         let help_text = self.key_map.help_text();
         let help_block = Block::default()
             .borders(Borders::ALL)
             .title("Help")
-            .style(self.theme.styles.base);
+            .style(self.theme_styles().base);
             
         let help_paragraph = Paragraph::new(help_text)
             .block(help_block)
-            .style(self.theme.styles.text);
+            .style(self.theme_styles().text);
             
         frame.render_widget(help_paragraph, help_area);
     }

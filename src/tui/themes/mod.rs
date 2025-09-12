@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 use anyhow::Result;
 
 pub mod colors;
-pub mod styles;
+// pub mod styles; // Temporarily commented out due to missing colors field
 pub mod presets;
 
 /// Theme represents a complete visual style configuration

@@ -35,7 +35,7 @@ pub mod animated_list;
 pub mod animated_dialog;
 pub mod animated_input;
 
-use crate::tui::themes::Theme;
+use crate::tui::themes::{Theme, Styles};
 use anyhow::Result;
 use ratatui::{
     layout::Rect,
@@ -44,6 +44,14 @@ use ratatui::{
 };
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc;
+
+// Re-exports for easy access from other modules
+pub use animation_engine::*;
+pub use timeline::Timeline;
+pub use transitions::*;
+
+// Alias for compatibility
+pub type Easing = EasingType;
 
 /// Animation events for inter-component communication
 #[derive(Debug, Clone)]
@@ -78,6 +86,39 @@ pub enum AnimationState {
 impl Default for AnimationState {
     fn default() -> Self {
         Self::Idle
+    }
+}
+
+impl AnimationState {
+    /// Create a new animation state in Idle state
+    pub fn new() -> Self {
+        Self::Idle
+    }
+    
+    /// Check if the animation is currently active
+    pub fn is_active(&self) -> bool {
+        matches!(self, AnimationState::Running { .. })
+    }
+    
+    /// Update the animation state with elapsed time
+    pub fn update(&mut self, delta_time: Duration) {
+        if let AnimationState::Running { current_frame, .. } = self {
+            *current_frame += 1;
+        }
+    }
+    
+    /// Get the current progress (0.0 to 1.0)
+    pub fn progress(&self) -> f32 {
+        match self {
+            AnimationState::Idle => 0.0,
+            AnimationState::Running { current_frame, .. } => {
+                // Simple progress calculation - could be improved
+                (*current_frame as f32 / 60.0).min(1.0)
+            }
+            AnimationState::Paused { .. } => 0.5, // Arbitrary value for paused state
+            AnimationState::Complete => 1.0,
+            AnimationState::Error(_) => 0.0,
+        }
     }
 }
 
@@ -280,23 +321,19 @@ impl Animatable for Style {
 }
 
 /// Animation manager for coordinating multiple animations
-#[derive(Debug)]
 pub struct AnimationManager {
     /// Active animations
     animations: std::collections::HashMap<String, Box<dyn Animation + Send + Sync>>,
     /// Event sender for animation updates
     event_sender: mpsc::UnboundedSender<AnimationEvent>,
-    /// Theme for styling animations
-    theme: Theme,
 }
 
 impl AnimationManager {
     /// Create a new animation manager
-    pub fn new(event_sender: mpsc::UnboundedSender<AnimationEvent>, theme: Theme) -> Self {
+    pub fn new(event_sender: mpsc::UnboundedSender<AnimationEvent>) -> Self {
         Self {
             animations: std::collections::HashMap::new(),
             event_sender,
-            theme,
         }
     }
     
@@ -350,15 +387,6 @@ impl AnimationManager {
         Ok(())
     }
     
-    /// Get the current theme
-    pub fn theme(&self) -> &Theme {
-        &self.theme
-    }
-    
-    /// Update the theme
-    pub fn set_theme(&mut self, theme: Theme) {
-        self.theme = theme;
-    }
 }
 
 /// Base trait for all animations

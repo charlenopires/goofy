@@ -201,19 +201,9 @@ impl App {
         // Start event loop
         self.start_event_loop().await?;
         
-        println!("🎉 Goofy Interactive Mode");
-        println!("Provider: {}", self.config.provider);
-        println!("Model: {}", self.config.model);
-        println!();
-        println!("Welcome to Goofy! The TUI is currently under development.");
-        println!("For now, you can use 'goofy run \"your prompt\"' for non-interactive mode.");
-        println!();
-        println!("Press Ctrl+C to exit");
+        // Launch the TUI
+        crate::tui::run_with_app(self).await?;
         
-        // For now, just wait for a signal
-        tokio::signal::ctrl_c().await?;
-        
-        println!("\nGoodbye! 👋");
         Ok(())
     }
     

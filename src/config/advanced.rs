@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 use tokio::fs;
 use tracing::{debug, error, info};
 
-use crate::llm::providers::LlmProvider;
+use crate::llm::LlmProvider;
 
 /// Advanced configuration for Goofy
 #[derive(Debug, Clone, Serialize, Deserialize)]
