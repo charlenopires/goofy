@@ -23,6 +23,7 @@ pub mod diagnostics;
 pub mod fetch;
 pub mod view;
 pub mod write;
+pub mod shell;
 
 pub use bash::BashTool;
 pub use file::FileTool;
@@ -38,6 +39,7 @@ pub use diagnostics::DiagnosticsTool;
 pub use fetch::FetchTool;
 pub use view::ViewTool;
 pub use write::WriteTool;
+pub use shell::ShellTool;
 
 // Re-export for easier access in tests (types defined below)
 
@@ -151,6 +153,7 @@ impl ToolManager {
         self.register_tool(Box::new(EditTool::new()));
         self.register_tool(Box::new(MultiEditTool::new()));
         self.register_tool(Box::new(BashTool::new()));
+        self.register_tool(Box::new(ShellTool::new()));
         self.register_tool(Box::new(GrepTool::new()));
         self.register_tool(Box::new(RgTool::new()));
         self.register_tool(Box::new(GlobTool::new()));

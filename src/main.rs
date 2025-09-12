@@ -15,6 +15,7 @@ mod mcp;
 mod utils;
 mod permission;
 mod version;
+mod shell;
 
 use cli::Cli;
 

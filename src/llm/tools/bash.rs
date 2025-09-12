@@ -3,10 +3,9 @@
 use super::{BaseTool, ToolRequest, ToolResponse, ToolResult};
 use async_trait::async_trait;
 use serde_json::json;
-use std::process::Stdio;
 use std::time::Duration;
-use tokio::process::Command;
 use tokio::time::timeout;
+use crate::shell::persistent::{get_persistent_shell, execute_in_persistent};
 
 /// Tool for executing bash commands
 pub struct BashTool;
@@ -16,37 +15,22 @@ impl BashTool {
         Self
     }
 
-    /// Execute a command with timeout and safety checks
+    /// Execute a command with timeout and safety checks using persistent shell
     async fn execute_command(&self, command: &str, working_dir: Option<&str>, timeout_ms: u64) -> ToolResult<(String, String, i32)> {
-        let mut cmd = if cfg!(target_os = "windows") {
-            let mut cmd = Command::new("cmd");
-            cmd.args(["/C", command]);
-            cmd
-        } else {
-            let mut cmd = Command::new("sh");
-            cmd.args(["-c", command]);
-            cmd
-        };
-
         // Set working directory if provided
         if let Some(dir) = working_dir {
-            cmd.current_dir(dir);
+            let shell = get_persistent_shell().await;
+            let shell = shell.lock().await;
+            if let Err(e) = shell.shell().set_working_dir(dir).await {
+                return Err(anyhow::anyhow!("Failed to set working directory: {}", e));
+            }
         }
-
-        cmd.stdout(Stdio::piped())
-           .stderr(Stdio::piped())
-           .stdin(Stdio::null());
-
-        let child = cmd.spawn()
-            .map_err(|e| anyhow::anyhow!("Failed to spawn command: {}", e))?;
 
         let timeout_duration = Duration::from_millis(timeout_ms);
         
-        match timeout(timeout_duration, child.wait_with_output()).await {
-            Ok(Ok(output)) => {
-                let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-                let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-                let exit_code = output.status.code().unwrap_or(-1);
+        // Execute command with timeout using persistent shell
+        match timeout(timeout_duration, execute_in_persistent(command)).await {
+            Ok(Ok((stdout, stderr, exit_code))) => {
                 Ok((stdout, stderr, exit_code))
             }
             Ok(Err(e)) => Err(anyhow::anyhow!("Command execution failed: {}", e)),
@@ -55,17 +39,16 @@ impl BashTool {
     }
 
     /// Check if command is potentially dangerous
+    /// The shell module already has built-in command blocking, but we keep additional checks here
     fn is_dangerous_command(&self, command: &str) -> bool {
-        let dangerous_commands = [
-            "rm -rf /", "rm -rf /*", ":(){ :|:& };:", // Fork bomb and destructive commands
-            "dd if=/dev/zero", "mkfs", "fdisk", // Disk operations
-            "shutdown", "reboot", "halt", "poweroff", // System control
-            "chmod 777 /", "chown root", // Permission changes
+        // Additional dangerous patterns not covered by shell's built-in blocker
+        let dangerous_patterns = [
             "curl", "wget", "nc", "netcat", // Network commands (can be restricted)
             "python -c", "perl -e", "ruby -e", // Inline script execution
+            "chmod 777 /", "chown root", // Permission changes
         ];
 
-        dangerous_commands.iter().any(|&dangerous| command.contains(dangerous))
+        dangerous_patterns.iter().any(|&pattern| command.contains(pattern))
     }
 }
 

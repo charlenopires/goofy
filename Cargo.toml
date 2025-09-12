@@ -5,6 +5,14 @@ edition = "2021"
 description = "A terminal-based AI coding assistant - Rust port of Charmbracelet's Crush"
 license = "MIT"
 
+[lib]
+name = "goofy"
+path = "src/lib.rs"
+
+[[bin]]
+name = "goofy"
+path = "src/main.rs"
+
 [dependencies]
 # CLI Framework
 clap = { version = "4.4", features = ["derive"] }
@@ -117,3 +125,4 @@ serde_yaml = "0.9"
 
 # JSON Schema generation
 schemars = "0.8"
+filetime = "0.2.26"
