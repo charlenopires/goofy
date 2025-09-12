@@ -16,6 +16,7 @@ mod utils;
 mod permission;
 mod version;
 mod shell;
+mod db;
 
 use cli::Cli;
 

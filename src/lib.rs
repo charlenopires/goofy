@@ -12,3 +12,4 @@ pub mod utils;
 pub mod permission;
 pub mod version;
 pub mod shell;
+pub mod db;

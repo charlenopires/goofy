@@ -5,9 +5,11 @@
 
 mod agent;
 mod events;
+mod app_with_db;
 
 pub use agent::*;
 pub use events::*;
+pub use app_with_db::AppWithDb;
 
 use anyhow::Result;
 use std::sync::Arc;
