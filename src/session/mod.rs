@@ -6,7 +6,11 @@
 mod session;
 mod conversation;
 mod database;
+mod service;
+mod pubsub;
 
 pub use session::*;
 pub use conversation::*;
 pub use database::*;
+pub use service::*;
+pub use pubsub::*;

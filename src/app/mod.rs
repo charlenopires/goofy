@@ -17,13 +17,14 @@ use tracing::{debug, info, error};
 use crate::{
     config::Config,
     llm::{LlmProvider, ProviderFactory, ProviderConfig, tools::{ToolManager, ToolPermissions}},
-    session::{SessionManager, Session, ConversationManager},
+    session::{SessionManager, Session, ConversationManager, SessionService, SessionServiceFactory},
 };
 
 /// Main application structure
 pub struct App {
     config: Config,
     session_manager: Arc<SessionManager>,
+    session_service: Arc<dyn SessionService>,
     conversation_manager: Arc<ConversationManager>,
     llm_provider: Arc<dyn LlmProvider>,
     tool_manager: Arc<ToolManager>,
@@ -37,8 +38,11 @@ impl App {
     pub async fn new(config: Config) -> Result<Self> {
         debug!("Creating new App instance");
         
-        // Initialize session manager
+        // Initialize session manager (legacy)
         let session_manager = Arc::new(SessionManager::new(&config.data_dir).await?);
+        
+        // Initialize new session service
+        let session_service = SessionServiceFactory::create(&config.data_dir).await?;
         
         // Initialize conversation manager
         let conversation_manager = Arc::new(ConversationManager::new());
@@ -83,6 +87,7 @@ impl App {
         Ok(App {
             config,
             session_manager,
+            session_service,
             conversation_manager,
             llm_provider: Arc::from(llm_provider),
             tool_manager,
@@ -95,6 +100,11 @@ impl App {
     /// Get the session manager
     pub fn session_manager(&self) -> &Arc<SessionManager> {
         &self.session_manager
+    }
+    
+    /// Get the session service
+    pub fn session_service(&self) -> &Arc<dyn SessionService> {
+        &self.session_service
     }
     
     /// Get the conversation manager
@@ -122,6 +132,9 @@ impl App {
         let mut event_rx = self.event_rx.write().await.take()
             .ok_or_else(|| anyhow::anyhow!("Event loop already started"))?;
         
+        // Subscribe to session events
+        let mut session_events = self.session_service.subscribe();
+        
         let (shutdown_tx, mut shutdown_rx) = mpsc::channel(1);
         self.shutdown_tx = Some(shutdown_tx);
         
@@ -131,6 +144,30 @@ impl App {
                     Some(event) = event_rx.recv() => {
                         if let Err(e) = Self::handle_event(event).await {
                             error!("Error handling event: {}", e);
+                        }
+                    }
+                    Some(session_event) = session_events.recv() => {
+                        // Convert session event to app event
+                        let app_event = match session_event.event_type {
+                            crate::session::EventType::Created => {
+                                AppEvent::SessionCreated { 
+                                    session_id: session_event.payload.id 
+                                }
+                            }
+                            crate::session::EventType::Updated => {
+                                AppEvent::SessionUpdated { 
+                                    session_id: session_event.payload.id 
+                                }
+                            }
+                            crate::session::EventType::Deleted => {
+                                AppEvent::SessionDeleted { 
+                                    session_id: session_event.payload.id 
+                                }
+                            }
+                        };
+                        
+                        if let Err(e) = Self::handle_event(app_event).await {
+                            error!("Error handling session event: {}", e);
                         }
                     }
                     _ = shutdown_rx.recv() => {
@@ -217,11 +254,14 @@ impl App {
             println!("Processing prompt...");
         }
         
-        // Create a new session for this interaction
-        let session = self.session_manager.create_session(
-            "Non-interactive session".to_string(),
-            None,
-        ).await?;
+        // Create a new session using the session service
+        let title = if prompt.len() > 100 {
+            format!("{}...", &prompt[..100])
+        } else {
+            prompt.to_string()
+        };
+        
+        let session = self.session_service.create(title).await?;
         
         // Start conversation
         let conversation = self.conversation_manager.start_conversation(
@@ -234,7 +274,22 @@ impl App {
         
         // Update session with token usage
         if let Some(usage) = response.metadata.get("usage") {
-            // TODO: Update session statistics
+            // Update session with completion details
+            let mut updated_session = session.clone();
+            updated_session.message_count += 2; // User message + assistant response
+            
+            // Parse usage if it's a JSON value
+            if let Ok(usage_obj) = serde_json::from_value::<serde_json::Map<String, serde_json::Value>>(usage.clone()) {
+                if let Some(prompt_tokens) = usage_obj.get("prompt_tokens").and_then(|v| v.as_i64()) {
+                    updated_session.prompt_tokens = prompt_tokens;
+                }
+                if let Some(completion_tokens) = usage_obj.get("completion_tokens").and_then(|v| v.as_i64()) {
+                    updated_session.completion_tokens = completion_tokens;
+                }
+            }
+            
+            // Save the updated session
+            let _ = self.session_service.save(updated_session).await;
         }
         
         if !quiet {
