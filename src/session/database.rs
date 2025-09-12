@@ -3,15 +3,17 @@
 use anyhow::Result;
 use rusqlite::{Connection, params, Row};
 use std::path::Path;
+use std::sync::Arc;
+use tokio::sync::Mutex;
 use chrono::{DateTime, Utc};
 use serde_json;
 
-use crate::llm::{Message, TokenUsage};
+use crate::llm::{Message};
 // use super::queries::{SessionQueries, MessageQueries}; // Complex type system needs reconciliation
 
 /// Database manager for session persistence
 pub struct Database {
-    conn: Connection,
+    conn: Arc<Mutex<Connection>>,
 }
 
 impl Database {
@@ -206,7 +208,8 @@ impl Database {
              FROM sessions ORDER BY updated_at DESC".to_string()
         };
         
-        let mut stmt = self.conn.prepare(&query)?;
+        let conn = self.conn.lock().await;
+        let mut stmt = conn.prepare(&query)?;
         let session_iter = stmt.query_map([], |row| {
             Ok(SessionRow::from_row(row)?)
         })?;
@@ -221,7 +224,8 @@ impl Database {
     
     /// Delete a session
     pub async fn delete_session(&self, id: &str) -> Result<()> {
-        self.conn.execute("DELETE FROM sessions WHERE id = ?1", [id])?;
+        let conn = self.conn.lock().await;
+        conn.execute("DELETE FROM sessions WHERE id = ?1", [id])?;
         Ok(())
     }
     
@@ -234,7 +238,8 @@ impl Database {
             Some(serde_json::to_string(&message.metadata)?)
         };
         
-        self.conn.execute(
+        let conn = self.conn.lock().await;
+        conn.execute(
             "INSERT INTO messages (id, session_id, role, content, timestamp, metadata)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             params![
@@ -265,7 +270,8 @@ impl Database {
              ORDER BY timestamp ASC".to_string()
         };
         
-        let mut stmt = self.conn.prepare(&query)?;
+        let conn = self.conn.lock().await;
+        let mut stmt = conn.prepare(&query)?;
         let message_iter = stmt.query_map([session_id], |row| {
             let id: String = row.get(0)?;
             let role_str: String = row.get(1)?;
@@ -306,13 +312,15 @@ impl Database {
     
     /// Delete messages for a session
     pub async fn delete_messages(&self, session_id: &str) -> Result<()> {
-        self.conn.execute("DELETE FROM messages WHERE session_id = ?1", [session_id])?;
+        let conn = self.conn.lock().await;
+        conn.execute("DELETE FROM messages WHERE session_id = ?1", [session_id])?;
         Ok(())
     }
     
     /// Get message count for a session
     pub async fn get_message_count(&self, session_id: &str) -> Result<i32> {
-        let count: i32 = self.conn.query_row(
+        let conn = self.conn.lock().await;
+        let count: i32 = conn.query_row(
             "SELECT COUNT(*) FROM messages WHERE session_id = ?1",
             [session_id],
             |row| row.get(0),

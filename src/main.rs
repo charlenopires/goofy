@@ -17,6 +17,10 @@ mod permission;
 mod version;
 mod shell;
 mod db;
+mod message;
+mod history;
+mod csync;
+mod format;
 
 use cli::Cli;
 
