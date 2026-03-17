@@ -191,9 +191,8 @@ impl Page for ChatPage {
 impl ChatPage {
     /// Render the messages area
     fn render_messages(&mut self, frame: &mut Frame, area: Rect, theme: &Theme) {
-        let mut theme_mut = theme.clone();
-        let styles = theme_mut.styles();
-        
+        let styles = &theme.styles;
+
         let block = Block::default()
             .borders(Borders::ALL)
             .title("Messages")
@@ -239,9 +238,8 @@ impl ChatPage {
     
     /// Render the input area
     fn render_input(&mut self, frame: &mut Frame, area: Rect, theme: &Theme) {
-        let mut theme_mut = theme.clone();
-        let styles = theme_mut.styles();
-        
+        let styles = &theme.styles;
+
         let block = Block::default()
             .borders(Borders::ALL)
             .title("Input (Press Enter to send)")

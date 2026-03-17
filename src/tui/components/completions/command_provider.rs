@@ -126,8 +126,9 @@ impl CommandProvider {
     fn detect_command_context(&self, context: &CompletionContext) -> CommandContext {
         let text = &context.text[..context.cursor_pos];
         let words: Vec<&str> = text.split_whitespace().collect();
-        
-        if words.is_empty() {
+
+        // If empty or still typing the first word (no space yet), it's a root command
+        if words.is_empty() || (words.len() == 1 && !text.ends_with(' ')) {
             return CommandContext::Root;
         }
 
@@ -202,7 +203,7 @@ impl CommandProvider {
             ("rsync", "Synchronize files"),
         ];
         
-        for (cmd, desc) in &common_commands {
+        for &(cmd, desc) in &common_commands {
             if cmd.starts_with(prefix) {
                 items.push(
                     CompletionItem::new(cmd, cmd, "system")
@@ -333,7 +334,7 @@ impl CommandProvider {
             ("--dry-run", "Show what would be done"),
         ];
         
-        for (flag, desc) in &common_flags {
+        for &(flag, desc) in &common_flags {
             if flag.starts_with(prefix) {
                 items.push(
                     CompletionItem::new(flag, flag, "flag")

@@ -4,7 +4,7 @@
 //! and data fetching until items become visible, dramatically improving
 //! performance for large datasets.
 
-use super::{ListItem, ListEvent};
+use super::ListItem;
 use anyhow::Result;
 use std::collections::{HashMap, VecDeque};
 use std::future::Future;
@@ -14,37 +14,47 @@ use std::time::{Duration, Instant};
 use tokio::sync::{mpsc, RwLock};
 
 /// Lazy loading manager for list components
-#[derive(Debug)]
 pub struct LazyLoader<T: ListItem> {
     /// Configuration for lazy loading behavior
     config: LazyLoadConfig,
-    
+
     /// Cache of loaded items
     item_cache: Arc<RwLock<HashMap<String, CachedItem<T>>>>,
-    
+
     /// Queue of items to load
     load_queue: VecDeque<LoadRequest>,
-    
+
     /// Currently loading items
     loading_items: HashMap<String, LoadingState>,
-    
+
     /// Item provider for fetching data
     item_provider: Option<Arc<dyn ItemProvider<T>>>,
-    
+
     /// Placeholder generator
     placeholder_generator: Option<Arc<dyn PlaceholderGenerator<T>>>,
-    
+
     /// Loading state callbacks
     state_callbacks: Vec<Arc<dyn Fn(LazyLoadEvent) + Send + Sync>>,
-    
+
     /// Performance metrics
     metrics: LazyLoadMetrics,
-    
+
     /// Background task handle
     task_handle: Option<tokio::task::JoinHandle<()>>,
-    
+
     /// Channel for communicating with background task
     load_sender: Option<mpsc::UnboundedSender<LoadRequest>>,
+}
+
+impl<T: ListItem> std::fmt::Debug for LazyLoader<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("LazyLoader")
+            .field("config", &self.config)
+            .field("load_queue_len", &self.load_queue.len())
+            .field("loading_items", &self.loading_items.len())
+            .field("metrics", &self.metrics)
+            .finish()
+    }
 }
 
 /// Configuration for lazy loading behavior
@@ -493,22 +503,51 @@ impl<T: ListItem + 'static> LazyLoader<T> {
             last_accessed: Instant::now(),
             load_duration,
         };
-        
-        let mut cache = self.item_cache.write().await;
-        cache.insert(item_id, cached_item);
-        
-        // Update metrics
-        self.metrics.cache_size = cache.len();
+
+        let cache_arc = Arc::clone(&self.item_cache);
+        let (cache_size, memory_usage) = {
+            let mut cache = cache_arc.write().await;
+            cache.insert(item_id, cached_item);
+
+            // Clean up cache if it's too large
+            let max_cache_size = self.config.max_cache_size;
+            let cache_ttl = self.config.cache_ttl;
+            if cache.len() > max_cache_size {
+                // Inline eviction to avoid borrow conflicts
+                let cutoff = Instant::now() - cache_ttl;
+                let to_remove: Vec<String> = cache.iter()
+                    .filter(|(_, item)| item.loaded_at < cutoff || item.last_accessed < cutoff)
+                    .map(|(id, _)| id.clone())
+                    .collect();
+                for id in to_remove {
+                    cache.remove(&id);
+                }
+
+                // If still too many, remove least recently used
+                if cache.len() > max_cache_size {
+                    let mut items: Vec<(String, Instant)> = cache.iter()
+                        .map(|(k, v)| (k.clone(), v.last_accessed))
+                        .collect();
+                    items.sort_by_key(|(_, t)| *t);
+                    let excess = cache.len() - max_cache_size;
+                    for (id, _) in items.iter().take(excess) {
+                        cache.remove(id);
+                    }
+                }
+            }
+
+            let size = cache.len();
+            let mem = size * 1024; // Rough estimate
+            (size, mem)
+        };
+
+        // Update metrics (after releasing the write lock)
+        self.metrics.cache_size = cache_size;
         self.update_avg_load_time(load_duration);
-        
-        // Clean up cache if it's too large
-        if cache.len() > self.config.max_cache_size {
-            self.evict_old_items(&mut cache);
-        }
-        
+
         self.emit_event(LazyLoadEvent::CacheUpdated {
-            cache_size: cache.len(),
-            memory_usage: self.estimate_memory_usage(&cache),
+            cache_size,
+            memory_usage,
         });
     }
     
@@ -697,7 +736,7 @@ impl<T: ListItem + 'static> LazyLoader<T> {
     }
 }
 
-impl<T: ListItem> Default for LazyLoader<T> {
+impl<T: ListItem + 'static> Default for LazyLoader<T> {
     fn default() -> Self {
         Self::new()
     }
@@ -764,7 +803,8 @@ mod tests {
         let item = loader.get_item("test1").await.unwrap();
         
         // Should get placeholder initially
-        assert!(item.content()[0].to_string().contains("Loading"));
+        let line_text: String = item.content()[0].spans.iter().map(|s| s.content.as_ref()).collect();
+        assert!(line_text.contains("Loading"));
     }
     
     #[tokio::test]

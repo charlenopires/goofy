@@ -86,7 +86,7 @@ impl CompletionEngine {
         // Check cache first
         let cache_key = self.generate_cache_key(context);
         {
-            let cache = self.cache.read().await;
+            let mut cache = self.cache.write().await;
             if let Some(cached_items) = cache.get(&cache_key) {
                 debug!("Found {} cached completions", cached_items.len());
                 return Ok(self.filter_and_rank_items(cached_items.clone(), query));
@@ -133,8 +133,8 @@ impl CompletionEngine {
         // Get cached completions for the base context
         let cache_key = self.generate_cache_key(context);
         let base_items = {
-            let cache = self.cache.read().await;
-            cache.get(&cache_key).cloned().unwrap_or_default()
+            let mut cache = self.cache.write().await;
+            cache.get(&cache_key).unwrap_or_default()
         };
 
         // If we have cached items, filter them
@@ -273,6 +273,7 @@ mod tests {
     use crate::tui::components::completions::{CompletionProvider, CompletionItem};
     use async_trait::async_trait;
 
+    #[derive(Debug)]
     struct MockProvider {
         name: String,
         items: Vec<CompletionItem>,

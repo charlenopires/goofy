@@ -338,6 +338,49 @@ impl FileItem for StandardFileItem {
     }
 }
 
+impl crate::tui::components::lists::ListItem for StandardFileItem {
+    fn id(&self) -> String {
+        self.path.to_string_lossy().to_string()
+    }
+
+    fn content(&self) -> Vec<Line<'static>> {
+        // Use a default theme for rendering content
+        // This provides a basic text representation
+        let mut spans = Vec::new();
+
+        let type_indicator = if self.is_directory {
+            "📁 "
+        } else {
+            "📄 "
+        };
+
+        spans.push(Span::raw(type_indicator.to_string()));
+        spans.push(Span::raw(self.name.clone()));
+
+        if let Some(size) = self.size {
+            spans.push(Span::raw(format!(" ({})", format_file_size(size))));
+        }
+
+        vec![Line::from(spans)]
+    }
+
+    fn height(&self) -> u16 {
+        1
+    }
+
+    fn selectable(&self) -> bool {
+        true
+    }
+
+    fn style(&self) -> Option<ratatui::style::Style> {
+        None
+    }
+
+    fn data(&self) -> Option<serde_json::Value> {
+        None
+    }
+}
+
 /// File operations events
 #[derive(Debug, Clone)]
 pub enum FileEvent {
@@ -378,12 +421,24 @@ pub fn validate_file_path(path: &Path) -> Result<()> {
     if path.to_string_lossy().contains("..") {
         return Err(anyhow::anyhow!("Path traversal not allowed"));
     }
-    
+
+    // Check for sensitive system paths
+    let sensitive_paths = [
+        "/etc/passwd", "/etc/shadow", "/etc/sudoers",
+        "/etc/gshadow", "/etc/master.passwd",
+    ];
+    let path_str = path.to_string_lossy();
+    for sensitive in &sensitive_paths {
+        if path_str == *sensitive || path_str.ends_with(sensitive) {
+            return Err(anyhow::anyhow!("Access to sensitive system file is not allowed: {}", path.display()));
+        }
+    }
+
     // Check if path exists
     if !path.exists() {
         return Err(anyhow::anyhow!("Path does not exist: {}", path.display()));
     }
-    
+
     Ok(())
 }
 

@@ -5,8 +5,7 @@
 
 use anyhow::{Result, Context};
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
-use tokio::sync::RwLock;
+use std::sync::{Arc, Mutex};
 use uuid::Uuid;
 use chrono::{DateTime, Utc};
 
@@ -140,25 +139,26 @@ pub struct CreateMessageParams {
 }
 
 /// Message service interface
+#[async_trait::async_trait]
 pub trait MessageService: Send + Sync {
     /// Subscribe to message events
     fn subscribe(&self) -> tokio::sync::mpsc::UnboundedReceiver<Event<Message>>;
-    
+
     /// Create a new message
     async fn create(&self, session_id: &str, params: CreateMessageParams) -> Result<Message>;
-    
+
     /// Update an existing message
     async fn update(&self, message: &Message) -> Result<()>;
-    
+
     /// Get a message by ID
     async fn get(&self, id: &str) -> Result<Option<Message>>;
-    
+
     /// List messages for a session
     async fn list(&self, session_id: &str) -> Result<Vec<Message>>;
-    
+
     /// Delete a message
     async fn delete(&self, id: &str) -> Result<()>;
-    
+
     /// Delete all messages for a session
     async fn delete_session_messages(&self, session_id: &str) -> Result<()>;
 }
@@ -166,12 +166,12 @@ pub trait MessageService: Send + Sync {
 /// Message service implementation
 pub struct MessageServiceImpl {
     broker: Arc<Broker<Message>>,
-    conn: Arc<RwLock<rusqlite::Connection>>,
+    conn: Arc<std::sync::Mutex<rusqlite::Connection>>,
 }
 
 impl MessageServiceImpl {
     /// Create a new message service
-    pub fn new(conn: Arc<RwLock<rusqlite::Connection>>) -> Self {
+    pub fn new(conn: Arc<std::sync::Mutex<rusqlite::Connection>>) -> Self {
         Self {
             broker: Arc::new(Broker::new()),
             conn,
@@ -248,7 +248,7 @@ impl MessageService for MessageServiceImpl {
         
         // Save to database
         let db_msg = self.to_db_message(&message);
-        let conn = self.conn.read().await;
+        let conn = self.conn.lock().unwrap();
         let queries = Queries::new(&conn);
         queries.create_message(&db_msg)?;
         
@@ -260,7 +260,7 @@ impl MessageService for MessageServiceImpl {
     
     async fn update(&self, message: &Message) -> Result<()> {
         let db_msg = self.to_db_message(message);
-        let conn = self.conn.read().await;
+        let conn = self.conn.lock().unwrap();
         let queries = Queries::new(&conn);
         queries.update_message(&db_msg)?;
         
@@ -271,7 +271,7 @@ impl MessageService for MessageServiceImpl {
     }
     
     async fn get(&self, id: &str) -> Result<Option<Message>> {
-        let conn = self.conn.read().await;
+        let conn = self.conn.lock().unwrap();
         let queries = Queries::new(&conn);
         
         if let Some(db_msg) = queries.get_message(id)? {
@@ -282,7 +282,7 @@ impl MessageService for MessageServiceImpl {
     }
     
     async fn list(&self, session_id: &str) -> Result<Vec<Message>> {
-        let conn = self.conn.read().await;
+        let conn = self.conn.lock().unwrap();
         let queries = Queries::new(&conn);
         let db_messages = queries.list_messages_by_session(session_id)?;
         
@@ -299,7 +299,7 @@ impl MessageService for MessageServiceImpl {
         let message = self.get(id).await?
             .ok_or_else(|| anyhow::anyhow!("Message not found"))?;
         
-        let conn = self.conn.read().await;
+        let conn = self.conn.lock().unwrap();
         let queries = Queries::new(&conn);
         queries.delete_message(id)?;
         
@@ -321,6 +321,6 @@ impl MessageService for MessageServiceImpl {
 }
 
 /// Create a new message service
-pub fn new_service(conn: Arc<RwLock<rusqlite::Connection>>) -> Arc<dyn MessageService> {
+pub fn new_service(conn: Arc<std::sync::Mutex<rusqlite::Connection>>) -> Arc<dyn MessageService> {
     Arc::new(MessageServiceImpl::new(conn))
 }

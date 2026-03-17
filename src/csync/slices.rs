@@ -11,7 +11,7 @@ pub struct LazySlice<T> {
 
 impl<T> LazySlice<T>
 where
-    T: Clone + Send + 'static,
+    T: Clone + Send + Sync + 'static,
 {
     /// Create a new lazy slice with a loader function
     pub fn new<F>(loader: F) -> Self

@@ -29,13 +29,15 @@ pub enum SpinnerStyle {
     Clock,
     /// Pulse effect: ●○●○
     Pulse,
+    /// Circle spinner: ◐◓◑◒
+    Circle,
     /// Custom with user-defined frames
     Custom(Vec<String>),
 }
 
 impl SpinnerStyle {
     /// Get the frames for this spinner style
-    pub fn frames(self) -> Vec<String> {
+    pub fn frames(&self) -> Vec<String> {
         match self {
             SpinnerStyle::Dots => vec![
                 "⠋".to_string(), "⠙".to_string(), "⠹".to_string(), "⠸".to_string(),
@@ -65,12 +67,15 @@ impl SpinnerStyle {
             SpinnerStyle::Pulse => vec![
                 "●".to_string(), "○".to_string(),
             ],
-            SpinnerStyle::Custom(frames) => frames,
+            SpinnerStyle::Circle => vec![
+                "◐".to_string(), "◓".to_string(), "◑".to_string(), "◒".to_string(),
+            ],
+            SpinnerStyle::Custom(frames) => frames.clone(),
         }
     }
     
     /// Get the recommended frame duration for this spinner style
-    pub fn frame_duration(self) -> Duration {
+    pub fn frame_duration(&self) -> Duration {
         match self {
             SpinnerStyle::Dots => Duration::from_millis(80),
             SpinnerStyle::Line => Duration::from_millis(100),
@@ -79,6 +84,7 @@ impl SpinnerStyle {
             SpinnerStyle::GrowingDots => Duration::from_millis(100),
             SpinnerStyle::Clock => Duration::from_millis(1000),
             SpinnerStyle::Pulse => Duration::from_millis(500),
+            SpinnerStyle::Circle => Duration::from_millis(150),
             SpinnerStyle::Custom(_) => Duration::from_millis(100),
         }
     }
@@ -127,8 +133,8 @@ impl SpinnerConfig {
     
     /// Set the spinner style
     pub fn style(mut self, style: SpinnerStyle) -> Self {
-        self.style = style;
         self.animation.duration = style.frame_duration() * style.frames().len() as u32;
+        self.style = style;
         self
     }
     
@@ -157,14 +163,34 @@ impl SpinnerConfig {
         self
     }
     
+    /// Set the label (alias for message)
+    pub fn with_label<S: Into<String>>(self, label: S) -> Self {
+        self.message(label)
+    }
+
     /// Set animation configuration
     pub fn animation(mut self, config: AnimationConfig) -> Self {
         self.animation = config;
         self
     }
+
+    /// Create a loading spinner configuration
+    pub fn loading() -> Self {
+        Self::new()
+            .style(SpinnerStyle::Dots)
+            .message("Loading...")
+    }
+
+    /// Create a thinking spinner configuration
+    pub fn thinking() -> Self {
+        Self::new()
+            .style(SpinnerStyle::Dots)
+            .message("Thinking...")
+    }
 }
 
 /// A loading spinner animation
+#[derive(Debug)]
 pub struct Spinner {
     /// Spinner configuration
     config: SpinnerConfig,
@@ -245,6 +271,85 @@ impl Spinner {
         } else {
             true
         }
+    }
+
+    /// Start the spinner (inherent method for direct use)
+    pub fn start(&mut self) {
+        self.state = AnimationState::Running {
+            start_time: Instant::now(),
+            current_frame: 0,
+        };
+        self.start_time = Some(Instant::now());
+        self.last_update = Some(Instant::now());
+    }
+
+    /// Stop the spinner (inherent method for direct use)
+    pub fn stop(&mut self) {
+        self.state = AnimationState::Complete;
+    }
+
+    /// Update the spinner (inherent method returning bool for direct use)
+    pub fn update(&mut self) -> Result<bool> {
+        match &self.state {
+            AnimationState::Running { start_time, .. } => {
+                if self.should_update_frame() {
+                    self.current_frame = (self.current_frame + 1) % self.frames.len();
+                    self.last_update = Some(Instant::now());
+
+                    let elapsed = start_time.elapsed();
+                    let frame_duration = self.config.style.frame_duration();
+                    let total_frames = (elapsed.as_nanos() / frame_duration.as_nanos()) as u32;
+
+                    self.state = AnimationState::Running {
+                        start_time: *start_time,
+                        current_frame: total_frames,
+                    };
+                    Ok(true)
+                } else {
+                    Ok(false)
+                }
+            }
+            _ => Ok(false),
+        }
+    }
+
+    /// Render the spinner as spans (inherent method for direct use)
+    pub fn render(&self) -> Vec<Span> {
+        let mut spans = Vec::new();
+
+        // Add prefix if enabled
+        if self.config.show_prefix && !self.config.prefix.is_empty() {
+            spans.push(Span::styled(
+                format!("{} ", self.config.prefix),
+                Style::default(),
+            ));
+        }
+
+        // Add spinner frame
+        let spinner_color = self.config.color.unwrap_or(Color::White);
+        spans.push(Span::styled(
+            self.current_frame().to_string(),
+            Style::default()
+                .fg(spinner_color)
+                .add_modifier(Modifier::BOLD),
+        ));
+
+        // Add message
+        if !self.config.message.is_empty() {
+            spans.push(Span::raw(" "));
+            let message_color = self.config.message_color.unwrap_or(Color::White);
+            spans.push(Span::styled(
+                self.config.message.clone(),
+                Style::default().fg(message_color),
+            ));
+        }
+
+        spans
+    }
+
+    /// Check if spinner is running (inherent method for direct use)
+    pub fn is_running(&self) -> bool {
+        matches!(self.state, AnimationState::Running { .. })
     }
 }
 
@@ -330,6 +435,7 @@ impl Animation for Spinner {
 }
 
 /// A multi-spinner that can show multiple concurrent loading operations
+#[derive(Debug)]
 pub struct MultiSpinner {
     /// Individual spinners with their IDs
     spinners: std::collections::HashMap<String, Spinner>,
@@ -356,9 +462,9 @@ impl MultiSpinner {
         
         // Start the spinner immediately if we're running
         if matches!(self.state, AnimationState::Running { .. }) {
-            spinner.start()?;
+            spinner.start();
         }
-        
+
         self.spinners.insert(id, spinner);
         Ok(())
     }
@@ -403,7 +509,7 @@ impl Animation for MultiSpinner {
         
         // Start all individual spinners
         for spinner in self.spinners.values_mut() {
-            spinner.start()?;
+            spinner.start();
         }
         
         Ok(())
@@ -414,7 +520,7 @@ impl Animation for MultiSpinner {
         
         // Stop all individual spinners
         for spinner in self.spinners.values_mut() {
-            spinner.stop()?;
+            spinner.stop();
         }
         
         Ok(())
@@ -423,7 +529,7 @@ impl Animation for MultiSpinner {
     fn update(&mut self) -> Result<()> {
         // Update all individual spinners
         for spinner in self.spinners.values_mut() {
-            spinner.update()?;
+            let _ = spinner.update();
         }
         
         // Update our own state frame counter
@@ -449,16 +555,16 @@ impl Animation for MultiSpinner {
     }
     
     fn render(&self, _area: Rect, theme: &Theme) -> Vec<Line> {
-        let mut lines = Vec::new();
-        
+        let mut lines: Vec<Line> = Vec::new();
+
         // Take up to max_visible spinners
         let spinners: Vec<_> = self.spinners.values().take(self.max_visible).collect();
-        
+
         for spinner in spinners {
-            let spinner_lines = spinner.render(_area, theme);
+            let spinner_lines = Animation::render(spinner, _area, theme);
             lines.extend(spinner_lines);
         }
-        
+
         // Show count if there are more spinners than visible
         if self.spinners.len() > self.max_visible {
             let hidden_count = self.spinners.len() - self.max_visible;
@@ -469,7 +575,7 @@ impl Animation for MultiSpinner {
                 ),
             ]));
         }
-        
+
         lines
     }
 }

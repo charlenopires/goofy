@@ -103,6 +103,7 @@ impl FadeConfig {
 }
 
 /// A fade animation that can be applied to any content
+#[derive(Debug)]
 pub struct FadeAnimation {
     /// Fade configuration
     config: FadeConfig,

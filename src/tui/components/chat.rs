@@ -371,10 +371,19 @@ impl EnhancedChatInterface {
 
     /// Process pending events
     async fn process_events(&mut self) -> Result<()> {
-        if let Some(ref mut receiver) = self.event_receiver {
+        // Collect events first to avoid double mutable borrow
+        let events: Vec<ChatEvent> = if let Some(ref mut receiver) = self.event_receiver {
+            let mut collected = Vec::new();
             while let Ok(event) = receiver.try_recv() {
-                self.handle_event(event).await?;
+                collected.push(event);
             }
+            collected
+        } else {
+            Vec::new()
+        };
+
+        for event in events {
+            self.handle_event(event).await?;
         }
         Ok(())
     }

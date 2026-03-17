@@ -233,7 +233,7 @@ impl MarkdownStyles {
                 .fg(Color::Gray),
             
             quote_text: Style::default()
-                .fg(Color::LightGray)
+                .fg(Color::Gray)
                 .add_modifier(Modifier::ITALIC),
             
             link: Style::default()
@@ -324,11 +324,11 @@ impl MarkdownStyles {
                 .add_modifier(Modifier::BOLD),
             
             heading_3: Style::default()
-                .fg(Color::LightGray)
+                .fg(Color::Gray)
                 .add_modifier(Modifier::BOLD),
             
             heading_4: Style::default()
-                .fg(Color::LightGray)
+                .fg(Color::Gray)
                 .add_modifier(Modifier::BOLD),
             
             heading_5: Style::default()
@@ -360,7 +360,7 @@ impl MarkdownStyles {
                 .bg(Color::Black),
             
             code_language: Style::default()
-                .fg(Color::LightGray)
+                .fg(Color::Gray)
                 .add_modifier(Modifier::ITALIC),
             
             list_marker: Style::default()
@@ -370,10 +370,10 @@ impl MarkdownStyles {
                 .fg(Color::White),
             
             quote_marker: Style::default()
-                .fg(Color::LightGray),
+                .fg(Color::Gray),
             
             quote_text: Style::default()
-                .fg(Color::LightGray)
+                .fg(Color::Gray)
                 .add_modifier(Modifier::ITALIC),
             
             link: Style::default()
@@ -397,10 +397,10 @@ impl MarkdownStyles {
                 .fg(Color::White),
             
             table_separator: Style::default()
-                .fg(Color::LightGray),
+                .fg(Color::Gray),
             
             rule: Style::default()
-                .fg(Color::LightGray),
+                .fg(Color::Gray),
             
             footnote_reference: Style::default()
                 .fg(Color::White)
@@ -435,11 +435,11 @@ impl MarkdownStyles {
                 .add_modifier(Modifier::BOLD),
             
             heading_4: Style::default()
-                .fg(Color::LightGray)
+                .fg(Color::Gray)
                 .add_modifier(Modifier::BOLD),
             
             heading_5: Style::default()
-                .fg(Color::LightGray),
+                .fg(Color::Gray),
             
             heading_6: Style::default()
                 .fg(Color::Gray),
@@ -457,10 +457,10 @@ impl MarkdownStyles {
                 .add_modifier(Modifier::CROSSED_OUT),
             
             inline_code: Style::default()
-                .fg(Color::LightGray),
+                .fg(Color::Gray),
             
             code_block: Style::default()
-                .fg(Color::LightGray),
+                .fg(Color::Gray),
             
             code_language: Style::default()
                 .fg(Color::Gray)
@@ -470,13 +470,13 @@ impl MarkdownStyles {
                 .fg(Color::White),
             
             task_marker: Style::default()
-                .fg(Color::LightGray),
+                .fg(Color::Gray),
             
             quote_marker: Style::default()
                 .fg(Color::Gray),
             
             quote_text: Style::default()
-                .fg(Color::LightGray)
+                .fg(Color::Gray)
                 .add_modifier(Modifier::ITALIC),
             
             link: Style::default()
@@ -487,7 +487,7 @@ impl MarkdownStyles {
                 .fg(Color::White),
             
             image: Style::default()
-                .fg(Color::LightGray),
+                .fg(Color::Gray),
             
             table_header: Style::default()
                 .fg(Color::White)
@@ -503,11 +503,11 @@ impl MarkdownStyles {
                 .fg(Color::Gray),
             
             footnote_reference: Style::default()
-                .fg(Color::LightGray)
+                .fg(Color::Gray)
                 .add_modifier(Modifier::ITALIC),
             
             footnote_definition: Style::default()
-                .fg(Color::LightGray)
+                .fg(Color::Gray)
                 .add_modifier(Modifier::BOLD),
             
             document_background: Color::Black,
@@ -577,6 +577,6 @@ mod tests {
         let monochrome = styles.monochrome();
         
         // All colors should be grayscale
-        assert!(matches!(monochrome.text.fg, Some(Color::White) | Some(Color::LightGray) | Some(Color::Gray) | Some(Color::DarkGray) | Some(Color::Black)));
+        assert!(matches!(monochrome.text.fg, Some(Color::White) | Some(Color::Gray) | Some(Color::Gray) | Some(Color::DarkGray) | Some(Color::Black)));
     }
 }

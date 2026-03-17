@@ -262,7 +262,7 @@ impl CompletionList {
     }
 
     /// Create list items for rendering
-    fn create_list_items(&self, theme: &Theme) -> Vec<ListItem> {
+    fn create_list_items(&self, theme: &Theme) -> Vec<ListItem<'static>> {
         let visible_items = self.items
             .iter()
             .skip(self.scroll_offset)
@@ -278,14 +278,14 @@ impl CompletionList {
     }
 
     /// Create a single list item
-    fn create_list_item(&self, item: &CompletionItem, is_selected: bool, theme: &Theme) -> ListItem {
+    fn create_list_item(&self, item: &CompletionItem, is_selected: bool, theme: &Theme) -> ListItem<'static> {
         let mut spans = Vec::new();
 
         // Highlight matching characters in title
         if self.highlight_matches && !self.query.is_empty() {
             spans.extend(self.highlight_text(&item.title, &self.query, theme));
         } else {
-            spans.push(Span::raw(&item.title));
+            spans.push(Span::raw(item.title.clone()));
         }
 
         // Add description if enabled
@@ -318,39 +318,39 @@ impl CompletionList {
     }
 
     /// Highlight matching characters in text
-    fn highlight_text<'a>(&self, text: &'a str, query: &str, theme: &Theme) -> Vec<Span<'a>> {
+    fn highlight_text(&self, text: &str, query: &str, theme: &Theme) -> Vec<Span<'static>> {
         let mut spans = Vec::new();
         let text_lower = text.to_lowercase();
         let query_lower = query.to_lowercase();
-        
+
         let mut last_end = 0;
         let mut pos = 0;
-        
+
         while let Some(found) = text_lower[pos..].find(&query_lower) {
             let absolute_pos = pos + found;
-            
+
             // Add text before match
             if absolute_pos > last_end {
-                spans.push(Span::raw(&text[last_end..absolute_pos]));
+                spans.push(Span::raw(text[last_end..absolute_pos].to_string()));
             }
-            
+
             // Add highlighted match
             spans.push(Span::styled(
-                &text[absolute_pos..absolute_pos + query.len()],
+                text[absolute_pos..absolute_pos + query.len()].to_string(),
                 Style::default()
                     .fg(theme.colors.accent)
                     .add_modifier(Modifier::BOLD),
             ));
-            
+
             last_end = absolute_pos + query.len();
             pos = last_end;
         }
-        
+
         // Add remaining text
         if last_end < text.len() {
-            spans.push(Span::raw(&text[last_end..]));
+            spans.push(Span::raw(text[last_end..].to_string()));
         }
-        
+
         spans
     }
 }
@@ -413,7 +413,7 @@ impl Component for CompletionList {
         // Clear the area behind the popup
         frame.render_widget(Clear, display_area);
 
-        // Create the list widget
+        // Create the list widget (collect items first to release immutable borrow)
         let items = self.create_list_items(theme);
         let list = List::new(items)
             .block(
@@ -430,8 +430,9 @@ impl Component for CompletionList {
                     .add_modifier(Modifier::BOLD),
             );
 
-        // Render the list
-        frame.render_stateful_widget(list, display_area, &mut self.list_state);
+        // Render the list using a separate mutable borrow of list_state
+        let list_state = &mut self.list_state;
+        frame.render_stateful_widget(list, display_area, list_state);
 
         // Show scroll indicator if needed
         if self.items.len() > self.max_visible_items {
@@ -547,8 +548,6 @@ pub fn handle_completion_message(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tui::themes::DEFAULT_THEME;
-
     #[test]
     fn test_completion_list_creation() {
         let list = CompletionList::new();

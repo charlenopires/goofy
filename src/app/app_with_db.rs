@@ -4,11 +4,11 @@ use anyhow::Result;
 use std::sync::Arc;
 use tokio::sync::{mpsc, RwLock};
 use tracing::{debug, info, error};
-
 use crate::{
     config::Config,
     llm::{LlmProvider, ProviderFactory, ProviderConfig, tools::{ToolManager, ToolPermissions}, MessageRole},
     session::{DatabaseSessionManager, DatabaseSessionFactory},
+    db::Session as DbSession,
 };
 
 use super::{AppEvent, Agent};
@@ -33,17 +33,31 @@ impl AppWithDb {
         let db_manager = DatabaseSessionFactory::create(&config.data_dir).await?;
         
         // Create LLM provider from config
-        let provider_config = ProviderConfig::from_config(&config)?;
-        let llm_provider = ProviderFactory::create(provider_config).await?;
+        let provider_config = ProviderConfig {
+            provider_type: config.provider.clone(),
+            api_key: config.api_key.clone(),
+            base_url: config.base_url.clone(),
+            model: config.model.clone(),
+            max_tokens: config.max_tokens,
+            temperature: config.temperature,
+            top_p: config.top_p,
+            stream: config.stream,
+            tools: Vec::new(),
+            extra_headers: config.extra_headers.clone(),
+            extra_body: config.extra_body.clone(),
+        };
+        let llm_provider: Arc<dyn LlmProvider> = Arc::from(ProviderFactory::create_provider(provider_config)?);
         
         // Initialize tool manager
+        let yolo = config.yolo_mode.unwrap_or(false);
+        let read_only = config.read_only.unwrap_or(false);
         let permissions = ToolPermissions {
             allow_read: true,
-            allow_write: !config.read_only,
-            allow_execute: config.yolo,
-            allow_network: config.yolo,
+            allow_write: !read_only,
+            allow_execute: yolo,
+            allow_network: yolo,
             restricted_paths: vec![],
-            yolo_mode: config.yolo,
+            yolo_mode: yolo,
         };
         let tool_manager = Arc::new(ToolManager::new(permissions));
         
@@ -83,34 +97,35 @@ impl AppWithDb {
     /// Run a single prompt non-interactively
     pub async fn run_prompt(&mut self, prompt: String) -> Result<()> {
         info!("Running non-interactive prompt with database backing");
-        
-        // Create a new session for this prompt
-        let session = self.db_manager.create_session(
-            prompt.chars().take(50).collect::<String>()
-        ).await?;
-        
-        // Add user message to database
+
+        // Create session using the public API
+        let title: String = prompt.chars().take(50).collect();
+        let session = self.db_manager.create_session(title).await?;
+
+        // Add user message via public API
         let user_message = crate::llm::Message::new_text(
             MessageRole::User,
             prompt.clone(),
         );
-        self.db_manager.add_message(&session.id, user_message).await?;
-        
+        self.db_manager.add_message(&session.id, user_message.clone()).await?;
+
         // Create agent for this session
         let agent = Agent::new(
             self.llm_provider.clone(),
             self.tool_manager.clone(),
             self.event_tx.clone(),
+            session.id.clone(),
         );
-        
+
         // Process the prompt
         info!("Processing prompt in session {}", session.id);
-        match agent.process_message(&prompt).await {
+        let messages = vec![user_message];
+        match agent.send_message(messages, None).await {
             Ok(response) => {
                 // Add assistant response to database
                 let mut assistant_message = crate::llm::Message::new_text(
                     MessageRole::Assistant,
-                    response.clone(),
+                    response.content.clone(),
                 );
                 assistant_message.metadata.insert(
                     "model".to_string(),
@@ -121,21 +136,21 @@ impl AppWithDb {
                     serde_json::json!(self.llm_provider.name()),
                 );
                 let msg = self.db_manager.add_message(&session.id, assistant_message).await?;
-                
+
                 // Mark message as finished
                 self.db_manager.finish_message(&msg.id).await?;
-                
+
                 // Update token usage if available
                 // TODO: Extract token usage from response metadata
-                
-                println!("{}", response);
+
+                println!("{}", response.content);
             }
             Err(e) => {
                 error!("Failed to process prompt: {}", e);
                 return Err(e);
             }
         }
-        
+
         Ok(())
     }
     
@@ -145,7 +160,7 @@ impl AppWithDb {
     }
     
     /// List recent sessions
-    pub async fn list_sessions(&self, limit: usize) -> Result<Vec<crate::db::Session>> {
+    pub async fn list_sessions(&self, limit: usize) -> Result<Vec<DbSession>> {
         self.db_manager.list_sessions(Some(limit)).await
     }
     

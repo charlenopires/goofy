@@ -5,17 +5,22 @@ use std::path::PathBuf;
 pub struct CoderPrompt;
 
 impl CoderPrompt {
-    /// Generate a coder prompt with context
-    pub fn generate(provider: &str, context_paths: &[PathBuf]) -> String {
+    /// Generate a coder prompt with context (async version)
+    pub async fn generate_async(provider: &str, context_paths: &[PathBuf]) -> String {
         let base_prompt = Self::base_prompt();
         let context = if !context_paths.is_empty() {
-            format!("\n\n## Context Files\n\n{}", 
-                super::process_context_paths(&PathBuf::from("."), context_paths))
+            format!("\n\n## Context Files\n\n{}",
+                super::process_context_paths(&PathBuf::from("."), context_paths).await)
         } else {
             String::new()
         };
-        
+
         format!("{}{}", base_prompt, context)
+    }
+
+    /// Generate a coder prompt (sync version, without file context)
+    pub fn generate(_provider: &str, _context_paths: &[PathBuf]) -> String {
+        Self::base_prompt().to_string()
     }
     
     fn base_prompt() -> &'static str {

@@ -155,22 +155,26 @@ pub fn camel_case_score(haystack: &str, needle: &str) -> f64 {
 /// Extract camel case characters from a string
 fn extract_camel_case_chars(text: &str) -> Vec<char> {
     let mut chars = Vec::new();
-    let mut previous_was_lower = false;
-    
-    for ch in text.chars() {
-        if ch.is_uppercase() || (!previous_was_lower && ch.is_alphabetic()) {
+    let chars_vec: Vec<char> = text.chars().collect();
+    let mut after_boundary = true; // Start of string is a boundary
+
+    for (i, &ch) in chars_vec.iter().enumerate() {
+        if ch == '_' || ch == '-' || ch == '.' {
+            // Separator is a word boundary; next char starts a new word
+            after_boundary = true;
+        } else if ch.is_uppercase() {
+            // Uppercase always starts a word in camelCase
             chars.push(ch);
-        } else if ch == '_' || ch == '-' {
-            // Treat underscore and dash as word boundaries
-            if let Some(next_char) = text.chars().nth(chars.len()) {
-                if next_char.is_alphabetic() {
-                    chars.push(next_char);
-                }
-            }
+            after_boundary = false;
+        } else if after_boundary && ch.is_alphabetic() {
+            // First alphabetic char after a boundary
+            chars.push(ch);
+            after_boundary = false;
+        } else {
+            after_boundary = false;
         }
-        previous_was_lower = ch.is_lowercase();
     }
-    
+
     chars
 }
 

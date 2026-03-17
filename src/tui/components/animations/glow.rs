@@ -412,51 +412,51 @@ impl Animation for GlowAnimation {
     }
 
     fn update(&mut self) -> Result<()> {
-        match &self.state {
+        let (elapsed, st) = match &self.state {
             AnimationState::Running { start_time, .. } => {
-                let elapsed = start_time.elapsed();
-                
-                if elapsed >= self.config.duration {
-                    if self.config.loop_count.is_none() {
-                        // Infinite loop - restart
-                        self.state = AnimationState::Running {
-                            start_time: Instant::now(),
-                            current_frame: 0,
-                        };
-                        self.start_time = Some(Instant::now());
-                    } else {
-                        // Finite loop - complete
-                        self.state = AnimationState::Complete;
-                        self.current_intensity = 0.0;
-                    }
-                } else {
-                    // Calculate progress and intensity
-                    let progress = elapsed.as_secs_f32() / self.config.duration.as_secs_f32();
-                    let adjusted_progress = if self.config.reverse {
-                        1.0 - progress
-                    } else {
-                        progress
-                    };
-                    
-                    self.current_intensity = self.calculate_glow_intensity(adjusted_progress);
-                    self.update_flicker();
-                    
-                    // Update frame count
-                    let frame_count = (elapsed.as_millis() / 16) as u32; // ~60 FPS
-                    self.state = AnimationState::Running {
-                        start_time: *start_time,
-                        current_frame: frame_count,
-                    };
-                }
+                (start_time.elapsed(), *start_time)
             }
-            _ => {}
+            _ => return Ok(()),
+        };
+
+        if elapsed >= self.config.duration {
+            if self.config.loop_count.is_none() {
+                // Infinite loop - restart
+                self.state = AnimationState::Running {
+                    start_time: Instant::now(),
+                    current_frame: 0,
+                };
+                self.start_time = Some(Instant::now());
+            } else {
+                // Finite loop - complete
+                self.state = AnimationState::Complete;
+                self.current_intensity = 0.0;
+            }
+        } else {
+            // Calculate progress and intensity
+            let progress = elapsed.as_secs_f32() / self.config.duration.as_secs_f32();
+            let adjusted_progress = if self.config.reverse {
+                1.0 - progress
+            } else {
+                progress
+            };
+
+            self.current_intensity = self.calculate_glow_intensity(adjusted_progress);
+            self.update_flicker();
+
+            // Update frame count
+            let frame_count = (elapsed.as_millis() / 16) as u32; // ~60 FPS
+            self.state = AnimationState::Running {
+                start_time: st,
+                current_frame: frame_count,
+            };
         }
-        
+
         Ok(())
     }
 
     fn is_complete(&self) -> bool {
-        matches!(self.state, AnimationState::Complete)
+        matches!(self.state, AnimationState::Complete | AnimationState::Idle)
     }
 
     fn state(&self) -> &AnimationState {
@@ -551,7 +551,7 @@ impl LayeredGlow {
     }
 
     /// Blend two sets of lines based on blend mode
-    fn blend_lines(&self, base: Vec<Line>, overlay: Vec<Line>) -> Vec<Line> {
+    fn blend_lines<'a>(&self, base: Vec<Line<'a>>, overlay: Vec<Line<'a>>) -> Vec<Line<'a>> {
         base.into_iter()
             .zip(overlay.into_iter())
             .map(|(base_line, overlay_line)| {
@@ -564,7 +564,7 @@ impl LayeredGlow {
                             base_span.style.fg.unwrap_or(Color::White),
                             overlay_span.style.fg.unwrap_or(Color::White),
                         );
-                        
+
                         Span::styled(
                             base_span.content,
                             base_span.style.fg(blended_color),

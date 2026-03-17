@@ -339,9 +339,9 @@ impl ChatSidebar {
                 }
             }
             SidebarMode::Files => {
-                if let Some(path) = self.file_tree.get_selected_path() {
+                if let Some(path) = self.file_tree.get_selected_path().cloned() {
                     if path.is_file() {
-                        Some(SidebarAction::FileSelected(path.clone()))
+                        Some(SidebarAction::FileSelected(path))
                     } else {
                         self.file_tree.toggle_expanded(&path);
                         None
@@ -411,14 +411,16 @@ impl ChatSidebar {
                 theme.styles.dialog_border
             });
 
+        let selected_session_id = self.selected_session_id.clone();
+        let compact_mode = self.compact_mode;
         let items: Vec<ListItem> = if self.search_mode {
             self.filtered_sessions.iter()
                 .filter_map(|&index| self.sessions.get(index))
-                .map(|session| self.create_session_list_item(session))
+                .map(|session| Self::create_session_list_item_static(session, theme, &selected_session_id, compact_mode))
                 .collect()
         } else {
             self.sessions.iter()
-                .map(|session| self.create_session_list_item(session))
+                .map(|session| Self::create_session_list_item_static(session, theme, &selected_session_id, compact_mode))
                 .collect()
         };
 
@@ -436,35 +438,39 @@ impl ChatSidebar {
     }
 
     /// Create a list item for a session
-    fn create_session_list_item(&self, session: &Session) -> ListItem {
+    fn create_session_list_item(&self, session: &Session) -> ListItem<'static> {
         let theme = self.theme_manager.current_theme();
-        
+        Self::create_session_list_item_static(session, theme, &self.selected_session_id, self.compact_mode)
+    }
+
+    /// Create a list item for a session (static helper to avoid borrow issues)
+    fn create_session_list_item_static(session: &Session, theme: &Theme, selected_session_id: &Option<String>, compact_mode: bool) -> ListItem<'static> {
         let mut spans = vec![
-            Span::styled("📝 ", theme.styles.info),
+            Span::styled("📝 ".to_string(), theme.styles.info),
         ];
-        
+
         // Session title
         let title = if session.title.len() > 30 {
             format!("{}...", &session.title[..27])
         } else {
             session.title.clone()
         };
-        
-        let title_style = if Some(&session.id) == self.selected_session_id.as_ref() {
+
+        let title_style = if Some(&session.id) == selected_session_id.as_ref() {
             theme.styles.text.add_modifier(Modifier::BOLD)
         } else {
             theme.styles.text
         };
-        
+
         spans.push(Span::styled(title, title_style));
-        
+
         // Add time info if not compact
-        if !self.compact_mode {
+        if !compact_mode {
             let time_ago = format_time_ago(session.updated_at);
             spans.push(Span::raw(" "));
             spans.push(Span::styled(time_ago, theme.styles.muted));
         }
-        
+
         ListItem::new(Line::from(spans))
     }
 
@@ -491,28 +497,28 @@ impl ChatSidebar {
     }
 
     /// Create a list item for a file node
-    fn create_file_list_item(&self, node: &FileNode) -> ListItem {
+    fn create_file_list_item(&self, node: &FileNode) -> ListItem<'static> {
         let theme = self.theme_manager.current_theme();
-        
+
         let mut spans = Vec::new();
-        
+
         // Indentation
         for _ in 0..node.depth {
             spans.push(Span::raw("  "));
         }
-        
+
         // Icon and name
         if node.is_directory {
             let icon = if node.is_expanded { "📂" } else { "📁" };
-            spans.push(Span::styled(icon, theme.styles.info));
+            spans.push(Span::styled(icon.to_string(), theme.styles.info));
         } else {
             let icon = get_file_icon(&node.name);
-            spans.push(Span::styled(icon, theme.styles.info));
+            spans.push(Span::styled(icon.to_string(), theme.styles.info));
         }
-        
+
         spans.push(Span::raw(" "));
-        spans.push(Span::styled(&node.name, theme.styles.text));
-        
+        spans.push(Span::styled(node.name.clone(), theme.styles.text));
+
         // Size info for files
         if !node.is_directory && !self.compact_mode {
             if let Some(size) = node.size {
@@ -523,7 +529,7 @@ impl ChatSidebar {
                 ));
             }
         }
-        
+
         ListItem::new(Line::from(spans))
     }
 
@@ -546,22 +552,22 @@ impl ChatSidebar {
     }
 
     /// Create a list item for a tool status
-    fn create_tool_list_item(&self, tool: &ToolStatus) -> ListItem {
+    fn create_tool_list_item(&self, tool: &ToolStatus) -> ListItem<'static> {
         let theme = self.theme_manager.current_theme();
-        
+
         let (icon, style) = match &tool.status {
             ToolState::Available => ("✅", theme.styles.success),
             ToolState::Running => ("⏳", theme.styles.info),
             ToolState::Error(_) => ("❌", theme.styles.error),
             ToolState::Disabled => ("⚫", theme.styles.muted),
         };
-        
+
         let mut spans = vec![
-            Span::styled(icon, style),
+            Span::styled(icon.to_string(), style),
             Span::raw(" "),
-            Span::styled(&tool.name, theme.styles.text),
+            Span::styled(tool.name.clone(), theme.styles.text),
         ];
-        
+
         if !self.compact_mode {
             spans.push(Span::raw(" "));
             spans.push(Span::styled(
@@ -569,7 +575,7 @@ impl ChatSidebar {
                 theme.styles.muted,
             ));
         }
-        
+
         ListItem::new(Line::from(spans))
     }
 
@@ -945,16 +951,24 @@ mod tests {
         sidebar.add_session(Session {
             id: "1".to_string(),
             title: "Test Session 1".to_string(),
+            parent_session_id: None,
             created_at: chrono::Utc::now(),
             updated_at: chrono::Utc::now(),
+            message_count: 0,
+            token_usage: crate::llm::TokenUsage::default(),
+            total_cost: 0.0,
             metadata: std::collections::HashMap::new(),
         });
-        
+
         sidebar.add_session(Session {
             id: "2".to_string(),
             title: "Another Session".to_string(),
+            parent_session_id: None,
             created_at: chrono::Utc::now(),
             updated_at: chrono::Utc::now(),
+            message_count: 0,
+            token_usage: crate::llm::TokenUsage::default(),
+            total_cost: 0.0,
             metadata: std::collections::HashMap::new(),
         });
         

@@ -1,6 +1,6 @@
 use anyhow::Result;
 use clap::Parser;
-use std::env;
+use std::env as std_env;
 use tracing::{error, info};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -21,6 +21,12 @@ mod message;
 mod history;
 mod csync;
 mod format;
+mod ansiext;
+mod env;
+mod diff;
+mod pubsub;
+mod fsext;
+mod log;
 
 use cli::Cli;
 
@@ -46,7 +52,7 @@ async fn main() {
     }
 
     // Start profiling server if enabled
-    if let Ok(profile_port) = env::var("GOOFY_PROFILE") {
+    if let Ok(profile_port) = std_env::var("GOOFY_PROFILE") {
         start_profiling_server(&profile_port).await;
     }
 

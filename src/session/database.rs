@@ -20,10 +20,10 @@ impl Database {
     /// Create a new database connection
     pub async fn new<P: AsRef<Path>>(db_path: P) -> Result<Self> {
         let conn = Connection::open(db_path)?;
-        
-        let db = Self { conn };
+
+        let db = Self { conn: Arc::new(Mutex::new(conn)) };
         db.create_tables().await?;
-        
+
         Ok(db)
     }
 
@@ -38,7 +38,8 @@ impl Database {
     
     /// Create the necessary database tables
     async fn create_tables(&self) -> Result<()> {
-        self.conn.execute(
+        let conn = self.conn.lock().await;
+        conn.execute(
             "CREATE TABLE IF NOT EXISTS sessions (
                 id TEXT PRIMARY KEY,
                 title TEXT NOT NULL,
@@ -53,8 +54,8 @@ impl Database {
             )",
             [],
         )?;
-        
-        self.conn.execute(
+
+        conn.execute(
             "CREATE TABLE IF NOT EXISTS messages (
                 id TEXT PRIMARY KEY,
                 session_id TEXT NOT NULL,
@@ -66,22 +67,22 @@ impl Database {
             )",
             [],
         )?;
-        
-        self.conn.execute(
+
+        conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_messages_session_id ON messages (session_id)",
             [],
         )?;
-        
-        self.conn.execute(
+
+        conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_messages_timestamp ON messages (timestamp)",
             [],
         )?;
-        
-        self.conn.execute(
+
+        conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_sessions_created_at ON sessions (created_at)",
             [],
         )?;
-        
+
         Ok(())
     }
     
@@ -95,14 +96,15 @@ impl Database {
     ) -> Result<()> {
         let now = Utc::now().to_rfc3339();
         let metadata_str = metadata.map(|m| serde_json::to_string(m)).transpose()?;
-        
-        self.conn.execute(
+
+        let conn = self.conn.lock().await;
+        conn.execute(
             "INSERT INTO sessions (
                 id, title, parent_session_id, created_at, updated_at, metadata
             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             params![id, title, parent_session_id, now, now, metadata_str],
         )?;
-        
+
         Ok(())
     }
     
@@ -119,75 +121,76 @@ impl Database {
     ) -> Result<()> {
         let now = Utc::now().to_rfc3339();
         let metadata_str = metadata.map(|m| serde_json::to_string(m)).transpose()?;
-        
-        // Simple approach using individual queries for each field
-        self.conn.execute(
+
+        let conn = self.conn.lock().await;
+        conn.execute(
             "UPDATE sessions SET updated_at = ?1 WHERE id = ?2",
             params![now, id],
         )?;
-        
+
         if let Some(title) = title {
-            self.conn.execute(
+            conn.execute(
                 "UPDATE sessions SET title = ?1 WHERE id = ?2",
                 params![title, id],
             )?;
         }
-        
+
         if let Some(count) = message_count {
-            self.conn.execute(
+            conn.execute(
                 "UPDATE sessions SET message_count = ?1 WHERE id = ?2",
                 params![count, id],
             )?;
         }
-        
+
         if let Some(input_tokens) = total_input_tokens {
-            self.conn.execute(
+            conn.execute(
                 "UPDATE sessions SET total_input_tokens = ?1 WHERE id = ?2",
                 params![input_tokens, id],
             )?;
         }
-        
+
         if let Some(output_tokens) = total_output_tokens {
-            self.conn.execute(
+            conn.execute(
                 "UPDATE sessions SET total_output_tokens = ?1 WHERE id = ?2",
                 params![output_tokens, id],
             )?;
         }
-        
+
         if let Some(cost) = total_cost {
-            self.conn.execute(
+            conn.execute(
                 "UPDATE sessions SET total_cost = ?1 WHERE id = ?2",
                 params![cost, id],
             )?;
         }
-        
+
         if let Some(metadata_str) = metadata_str {
-            self.conn.execute(
+            conn.execute(
                 "UPDATE sessions SET metadata = ?1 WHERE id = ?2",
                 params![metadata_str, id],
             )?;
         }
-        
+
         Ok(())
     }
     
     /// Get a session by ID
     pub async fn get_session(&self, id: &str) -> Result<Option<SessionRow>> {
-        let mut stmt = self.conn.prepare(
-            "SELECT id, title, parent_session_id, created_at, updated_at, 
-                    message_count, total_input_tokens, total_output_tokens, 
+        let conn = self.conn.lock().await;
+        let mut stmt = conn.prepare(
+            "SELECT id, title, parent_session_id, created_at, updated_at,
+                    message_count, total_input_tokens, total_output_tokens,
                     total_cost, metadata
              FROM sessions WHERE id = ?1"
         )?;
-        
+
         let session_iter = stmt.query_map([id], |row| {
             Ok(SessionRow::from_row(row)?)
         })?;
-        
+
         for session in session_iter {
             return Ok(Some(session?));
         }
-        
+
         Ok(None)
     }
     

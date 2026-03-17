@@ -5,10 +5,12 @@
 
 use super::animation_engine::{AnimationEngine, AnimationConfig, EasingType};
 use super::interpolation::{Interpolatable, Point};
+use super::{Animation, AnimationState};
+use crate::tui::themes::Theme;
 use anyhow::Result;
 use ratatui::layout::Rect;
 use ratatui::text::Line;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 /// Slide animation direction
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -180,6 +182,7 @@ pub struct SlideAnimation {
     start_position: Point,
     end_position: Point,
     is_active: bool,
+    anim_state: AnimationState,
 }
 
 impl SlideAnimation {
@@ -198,6 +201,7 @@ impl SlideAnimation {
             start_position: start_pos,
             end_position: end_pos,
             is_active: false,
+            anim_state: AnimationState::Idle,
         }
     }
 
@@ -267,6 +271,10 @@ impl SlideAnimation {
     pub fn start(&mut self) {
         self.animation.start();
         self.is_active = true;
+        self.anim_state = AnimationState::Running {
+            start_time: Instant::now(),
+            current_frame: 0,
+        };
         self.update_current_area(0.0);
     }
 
@@ -274,6 +282,7 @@ impl SlideAnimation {
     pub fn stop(&mut self) {
         self.animation.stop();
         self.is_active = false;
+        self.anim_state = AnimationState::Complete;
     }
 
     /// Update the animation
@@ -373,6 +382,57 @@ impl SlideAnimation {
     }
 }
 
+impl Animation for SlideAnimation {
+    fn start(&mut self) -> Result<()> {
+        self.animation.start();
+        self.is_active = true;
+        self.anim_state = AnimationState::Running {
+            start_time: Instant::now(),
+            current_frame: 0,
+        };
+        self.update_current_area(0.0);
+        Ok(())
+    }
+
+    fn stop(&mut self) -> Result<()> {
+        self.animation.stop();
+        self.is_active = false;
+        self.anim_state = AnimationState::Complete;
+        Ok(())
+    }
+
+    fn update(&mut self) -> Result<()> {
+        if !self.is_active {
+            return Ok(());
+        }
+
+        if self.animation.should_update() {
+            let progress = self.animation.eased_progress();
+            self.update_current_area(progress);
+        } else if self.animation.is_completed() {
+            self.update_current_area(1.0);
+            self.is_active = false;
+            self.anim_state = AnimationState::Complete;
+        }
+
+        Ok(())
+    }
+
+    fn is_complete(&self) -> bool {
+        self.animation.is_completed()
+    }
+
+    fn state(&self) -> &AnimationState {
+        &self.anim_state
+    }
+
+    fn render(&self, _area: Rect, _theme: &Theme) -> Vec<Line> {
+        // SlideAnimation affects positioning, not content rendering.
+        // Return empty lines; the caller should use current_area() for positioning.
+        Vec::new()
+    }
+}
+
 /// Slide sequence for chaining multiple slide animations
 #[derive(Debug)]
 pub struct SlideSequence {
@@ -453,7 +513,7 @@ impl SlideSequence {
 
     /// Get overall sequence progress
     pub fn progress(&self) -> f32 {
-        if self.slides.is_empty() {
+        if self.slides.is_empty() || !self.is_active {
             return 1.0;
         }
 
@@ -589,7 +649,7 @@ mod tests {
         let area2 = Rect::new(10, 10, 10, 10);
         
         let slide1 = SlideAnimation::new(SlideConfig::sidebar_in(), area1);
-        let slide2 = SlideAnimation::new(SlideConfig::panel_in(area2), area2);
+        let slide2 = SlideAnimation::new(SlideConfig::panel_from_right(), area2);
         
         let mut sequence = SlideSequence::new()
             .add_slide(slide1)

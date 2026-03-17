@@ -543,9 +543,10 @@ mod tests {
     #[test]
     fn test_column_width_calculation() {
         let config = TableConfig::default();
+        let min_column_width = config.min_column_width;
         let styles = MarkdownStyles::default();
         let renderer = TableRenderer::new(config, styles);
-        
+
         let data = TableData {
             headers: vec!["Short".to_string(), "Very Long Header".to_string()],
             rows: vec![
@@ -554,11 +555,11 @@ mod tests {
             ],
             alignments: vec![Alignment::Left, Alignment::Left],
         };
-        
+
         let widths = renderer.calculate_column_widths(&data, 80, 2).unwrap();
         assert_eq!(widths.len(), 2);
-        assert!(widths[0] >= config.min_column_width);
-        assert!(widths[1] >= config.min_column_width);
+        assert!(widths[0] >= min_column_width);
+        assert!(widths[1] >= min_column_width);
     }
     
     #[test]

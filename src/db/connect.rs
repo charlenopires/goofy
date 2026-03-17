@@ -39,31 +39,31 @@ pub fn connect(config: DatabaseConfig) -> Result<Connection> {
     let mut conn = Connection::open(&db_path)
         .context("Failed to open database")?;
     
-    // Set pragmas for better performance
-    set_pragmas(&conn)?;
+    // First, disable foreign keys to allow table creation
+    conn.execute_batch("PRAGMA foreign_keys = OFF;")
+        .context("Failed to disable foreign keys")?;
     
-    // Apply migrations
+    // Apply migrations (creates tables)
     apply_migrations(&mut conn)?;
+    
+    // Now set pragmas including re-enabling foreign keys
+    set_pragmas(&conn)?;
     
     Ok(conn)
 }
 
 /// Set SQLite pragmas for better performance
 fn set_pragmas(conn: &Connection) -> Result<()> {
-    let pragmas = [
-        "PRAGMA foreign_keys = ON",
-        "PRAGMA journal_mode = WAL",
-        "PRAGMA page_size = 4096",
-        "PRAGMA cache_size = -8000",
-        "PRAGMA synchronous = NORMAL",
-    ];
-    
-    for pragma in &pragmas {
-        conn.execute(pragma, params![])
-            .with_context(|| format!("Failed to set pragma: {}", pragma))?;
-        debug!("Set pragma: {}", pragma);
-    }
-    
+    // journal_mode returns results, so use execute_batch
+    conn.execute_batch(
+        "PRAGMA foreign_keys = ON;
+         PRAGMA journal_mode = WAL;
+         PRAGMA page_size = 4096;
+         PRAGMA cache_size = -8000;
+         PRAGMA synchronous = NORMAL;"
+    ).context("Failed to set pragmas")?;
+    debug!("Set all pragmas");
+
     Ok(())
 }
 

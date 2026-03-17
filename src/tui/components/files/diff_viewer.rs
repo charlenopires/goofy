@@ -13,6 +13,7 @@ use crate::tui::{
     Frame,
 };
 use anyhow::Result;
+use async_trait::async_trait;
 use crossterm::event::{KeyCode, KeyEvent, MouseEvent};
 use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Rect},
@@ -359,7 +360,7 @@ impl DiffViewer {
                 // Add deleted lines
                 if before_pos < before_lines.len() && 
                    (after_pos >= after_lines.len() || 
-                    before_lines[before_pos] != after_lines.get(after_pos).unwrap_or(&"")) {
+                    before_lines[before_pos] != after_lines.get(after_pos).copied().unwrap_or("")) {
                     hunk_lines.push(DiffLine {
                         kind: DiffLineKind::Delete,
                         content: before_lines[before_pos].to_string(),
@@ -372,7 +373,7 @@ impl DiffViewer {
                 // Add inserted lines
                 if after_pos < after_lines.len() && 
                    (before_pos >= before_lines.len() || 
-                    after_lines[after_pos] != before_lines.get(before_pos).unwrap_or(&"")) {
+                    after_lines[after_pos] != before_lines.get(before_pos).copied().unwrap_or("")) {
                     hunk_lines.push(DiffLine {
                         kind: DiffLineKind::Insert,
                         content: after_lines[after_pos].to_string(),
@@ -675,6 +676,7 @@ impl DiffViewer {
     }
 }
 
+#[async_trait]
 impl Component for DiffViewer {
     async fn handle_key_event(&mut self, event: KeyEvent) -> Result<()> {
         if !self.has_focus {

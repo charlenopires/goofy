@@ -321,7 +321,7 @@ impl AnimatedInput {
         }
         
         self.value = value;
-        self.cursor_position = self.value.chars().count().min(self.cursor_position);
+        self.cursor_position = self.value.chars().count();
         self.validate_input();
     }
 
@@ -433,7 +433,7 @@ impl AnimatedInput {
             InputAnimationStyle::Focus => {
                 let fade_config = FadeConfig::new()
                     .direction(FadeDirection::In)
-                    .animation(AnimationConfig::new(self.config.focus_duration)
+                    .animation(AnimationConfig::new().duration(self.config.focus_duration)
                         .with_easing(EasingType::EaseOut));
                 self.focus_animation = Some(Box::new(FadeAnimation::new(fade_config)));
             }
@@ -586,7 +586,7 @@ impl Animation for AnimatedInput {
     }
 
     fn is_complete(&self) -> bool {
-        matches!(self.state, AnimationState::Complete)
+        matches!(self.state, AnimationState::Complete | AnimationState::Idle)
     }
 
     fn state(&self) -> &AnimationState {

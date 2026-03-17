@@ -342,10 +342,10 @@ impl MessageRenderer {
     /// Create message header with role and timestamp
     fn create_message_header(&self, message: &Message, theme: &Theme) -> Text<'static> {
         let role_style = match message.role {
-            MessageRole::User => theme.styles.chat_user,
-            MessageRole::Assistant => theme.styles.chat_assistant,
-            MessageRole::System => theme.styles.chat_system,
-            MessageRole::Tool => theme.styles.chat_tool,
+            MessageRole::User => theme.styles.chat_user_message,
+            MessageRole::Assistant => theme.styles.chat_assistant_message,
+            MessageRole::System => theme.styles.chat_system_message,
+            MessageRole::Tool => theme.styles.chat_tool_message,
         };
         
         let role_icon = match message.role {
@@ -383,8 +383,8 @@ impl MessageRenderer {
                 }
                 ContentBlock::ToolUse { name, input, .. } => {
                     lines.push(Line::from(vec![
-                        Span::styled("🔧 ", theme.styles.chat_tool),
-                        Span::styled(format!("Tool: {}", name), theme.styles.chat_tool),
+                        Span::styled("🔧 ", theme.styles.chat_tool_message),
+                        Span::styled(format!("Tool: {}", name), theme.styles.chat_tool_message),
                     ]));
                     if let Ok(pretty_input) = serde_json::to_string_pretty(input) {
                         lines.extend(self.syntax_highlighter.highlight_json(&pretty_input, theme));

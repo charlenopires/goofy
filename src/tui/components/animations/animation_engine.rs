@@ -43,6 +43,37 @@ pub enum EasingType {
     EaseInElastic,
     EaseOutElastic,
     EaseInOutElastic,
+    Bounce,
+    Elastic,
+    Back,
+    EaseInBack,
+    EaseOutBack,
+    EaseInOutBack,
+}
+
+impl From<super::EasingType> for EasingType {
+    fn from(e: super::EasingType) -> Self {
+        match e {
+            super::EasingType::Linear => EasingType::Linear,
+            super::EasingType::EaseIn => EasingType::EaseIn,
+            super::EasingType::EaseOut => EasingType::EaseOut,
+            super::EasingType::EaseInOut => EasingType::EaseInOut,
+            super::EasingType::Bounce => EasingType::Bounce,
+            super::EasingType::Elastic => EasingType::Elastic,
+            super::EasingType::Back | super::EasingType::EaseInBack => EasingType::EaseInBack,
+            super::EasingType::EaseOutBack => EasingType::EaseOutBack,
+            super::EasingType::EaseInOutBack => EasingType::EaseInOutBack,
+            super::EasingType::EaseInQuad => EasingType::EaseInQuad,
+            super::EasingType::EaseOutQuad => EasingType::EaseOutQuad,
+            super::EasingType::EaseInCubic => EasingType::EaseInCubic,
+            super::EasingType::EaseOutCubic => EasingType::EaseOutCubic,
+            super::EasingType::EaseInOutCubic => EasingType::EaseInOutCubic,
+            super::EasingType::EaseInQuart => EasingType::EaseInQuart,
+            super::EasingType::EaseOutQuart => EasingType::EaseOutQuart,
+            super::EasingType::EaseOutBounce => EasingType::EaseOutBounce,
+            super::EasingType::EaseOutElastic => EasingType::EaseOutElastic,
+        }
+    }
 }
 
 /// Animation configuration
@@ -408,6 +439,36 @@ pub fn ease(t: f32, easing: EasingType) -> f32 {
                 let p = 0.3 * 1.5;
                 let s = p / 4.0;
                 0.5 * 2.0_f32.powf(-10.0 * (2.0 * t - 1.0)) * ((2.0 * t - 1.0 - s) * (2.0 * std::f32::consts::PI) / p).sin() + 1.0
+            }
+        }
+        EasingType::Bounce => ease_out_bounce(t),
+        EasingType::Elastic => {
+            if t == 0.0 || t == 1.0 {
+                t
+            } else {
+                let p = 0.3;
+                let s = p / 4.0;
+                2.0_f32.powf(-10.0 * t) * ((t - s) * (2.0 * std::f32::consts::PI) / p).sin() + 1.0
+            }
+        }
+        EasingType::Back | EasingType::EaseInBack => {
+            let c1 = 1.70158;
+            let c3 = c1 + 1.0;
+            c3 * t * t * t - c1 * t * t
+        }
+        EasingType::EaseOutBack => {
+            let c1 = 1.70158;
+            let c3 = c1 + 1.0;
+            let p = t - 1.0;
+            1.0 + c3 * p * p * p + c1 * p * p
+        }
+        EasingType::EaseInOutBack => {
+            let c1 = 1.70158;
+            let c2 = c1 * 1.525;
+            if t < 0.5 {
+                (2.0 * t).powi(2) * ((c2 + 1.0) * 2.0 * t - c2) / 2.0
+            } else {
+                ((2.0 * t - 2.0).powi(2) * ((c2 + 1.0) * (t * 2.0 - 2.0) + c2) + 2.0) / 2.0
             }
         }
     }

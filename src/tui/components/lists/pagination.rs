@@ -4,20 +4,18 @@
 //! virtual lists and regular lists, supporting various pagination styles
 //! and navigation patterns.
 
-use super::{ListItem, ListEvent};
+use super::ListItem;
 use anyhow::Result;
 use crossterm::event::{KeyCode, KeyEvent, MouseEvent, MouseEventKind};
 use ratatui::{
-    layout::{Alignment, Constraint, Direction, Layout, Rect},
+    layout::Rect,
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Paragraph},
 };
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
 /// Pagination manager for list components
-#[derive(Debug)]
 pub struct PaginationManager<T: ListItem> {
     /// Current page (0-based)
     current_page: usize,
@@ -42,6 +40,19 @@ pub struct PaginationManager<T: ListItem> {
     
     /// Event callbacks
     callbacks: Vec<Box<dyn Fn(PaginationEvent) + Send + Sync>>,
+}
+
+impl<T: ListItem> std::fmt::Debug for PaginationManager<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PaginationManager")
+            .field("current_page", &self.current_page)
+            .field("page_size", &self.page_size)
+            .field("total_items", &self.total_items)
+            .field("config", &self.config)
+            .field("metrics", &self.metrics)
+            .field("callbacks", &format!("[{} callbacks]", self.callbacks.len()))
+            .finish()
+    }
 }
 
 /// Pagination configuration
@@ -747,15 +758,15 @@ impl<T: ListItem> PaginationManager<T> {
         if self.navigation_state.goto_active {
             lines.push(Line::from(vec![
                 Span::styled("Go to page: ", self.config.styling.text_style),
-                Span::styled(&self.navigation_state.goto_input, self.config.styling.input_style),
+                Span::styled(self.navigation_state.goto_input.clone(), self.config.styling.input_style),
                 Span::styled("_", self.config.styling.input_style),
             ]));
         }
-        
+
         if self.navigation_state.page_size_active {
             lines.push(Line::from(vec![
                 Span::styled("Items per page: ", self.config.styling.text_style),
-                Span::styled(&self.navigation_state.page_size_input, self.config.styling.input_style),
+                Span::styled(self.navigation_state.page_size_input.clone(), self.config.styling.input_style),
                 Span::styled("_", self.config.styling.input_style),
             ]));
         }
@@ -919,7 +930,7 @@ mod tests {
     
     #[test]
     fn test_page_navigation() {
-        let mut manager = PaginationManager::new();
+        let mut manager: PaginationManager<SimpleListItem> = PaginationManager::new();
         manager.set_total_items(100);
         
         assert_eq!(manager.total_pages(), 5); // 20 items per page by default
@@ -940,7 +951,7 @@ mod tests {
     
     #[test]
     fn test_page_size_change() {
-        let mut manager = PaginationManager::new();
+        let mut manager: PaginationManager<SimpleListItem> = PaginationManager::new();
         manager.set_total_items(100);
         
         assert_eq!(manager.total_pages(), 5); // 20 items per page
@@ -952,7 +963,7 @@ mod tests {
     
     #[test]
     fn test_page_ranges() {
-        let mut manager = PaginationManager::new();
+        let mut manager: PaginationManager<SimpleListItem> = PaginationManager::new();
         manager.set_total_items(100);
         manager.set_page_size(10);
         
@@ -970,13 +981,15 @@ mod tests {
     
     #[test]
     fn test_goto_page_functionality() {
-        let mut manager = PaginationManager::new();
+        let mut config = PaginationConfig::default();
+        config.show_goto_page = true;
+        let mut manager: PaginationManager<SimpleListItem> = PaginationManager::with_config(config);
         manager.set_total_items(100);
-        
+
         manager.start_goto_page();
         manager.goto_page_input('5');
         manager.execute_goto_page().unwrap();
-        
+
         assert_eq!(manager.current_page(), 4); // Page 5 is index 4
     }
     

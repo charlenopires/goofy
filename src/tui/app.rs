@@ -191,7 +191,7 @@ impl App {
     /// Render the application UI
     /// Helper method to get theme styles
     fn theme_styles(&mut self) -> crate::tui::themes::Styles {
-        self.theme.styles().clone()
+        self.theme.styles.clone()
     }
     
     pub fn render(&mut self, frame: &mut Frame) {

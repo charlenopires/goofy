@@ -6,7 +6,7 @@
 
 use super::{ImageConfig, RenderQuality, ColorMode};
 use anyhow::Result;
-use image::{DynamicImage, Rgb, Rgba};
+use image::{DynamicImage, GenericImageView, Rgb, Rgba};
 use ratatui::{
     layout::Rect,
     style::{Color, Style},
@@ -189,34 +189,30 @@ impl ImageRenderer {
         let img_width = image.width() as f32;
         let img_height = image.height() as f32;
         let img_ratio = img_width / img_height;
-        
+
         let max_width = self.config.max_width.min(area.width) as f32;
         let max_height = self.config.max_height.min(area.height) as f32;
-        
+
         if !self.config.preserve_aspect_ratio {
             return (max_width as u16, max_height as u16);
         }
-        
-        // Terminal character aspect ratio is roughly 1:2 (width:height)
-        // So we need to adjust for this when calculating dimensions
-        let terminal_ratio = 0.5;
-        let adjusted_max_height = max_height * terminal_ratio;
-        
-        let (display_width, display_height) = if img_ratio > max_width / adjusted_max_height {
+
+        // Calculate dimensions preserving aspect ratio
+        let (display_width, display_height) = if img_ratio > max_width / max_height {
             // Width is the limiting factor
             let width = max_width;
-            let height = width / img_ratio / terminal_ratio;
+            let height = width / img_ratio;
             (width, height)
         } else {
             // Height is the limiting factor
-            let height = adjusted_max_height;
-            let width = height * img_ratio * terminal_ratio;
+            let height = max_height;
+            let width = height * img_ratio;
             (width, height)
         };
-        
+
         (
             display_width.min(max_width) as u16,
-            (display_height * 2.0).min(max_height) as u16, // Double for half-block rendering
+            display_height.min(max_height) as u16,
         )
     }
     
@@ -233,12 +229,12 @@ impl ImageRenderer {
 }
 
 /// Convert RGBA pixel to ratatui Color
-fn rgba_to_color(pixel: &Rgba<u8>) -> Color {
+fn rgba_to_color(pixel: Rgba<u8>) -> Color {
     Color::Rgb(pixel[0], pixel[1], pixel[2])
 }
 
 /// Convert RGBA pixel to nearest 256-color palette entry
-fn rgba_to_palette256(pixel: &Rgba<u8>) -> Color {
+fn rgba_to_palette256(pixel: Rgba<u8>) -> Color {
     // Simplified 256-color palette mapping
     // In practice, you'd use a more sophisticated color distance algorithm
     let r = pixel[0] as u16;
@@ -255,7 +251,7 @@ fn rgba_to_palette256(pixel: &Rgba<u8>) -> Color {
 }
 
 /// Convert RGBA pixel to nearest 16-color palette entry
-fn rgba_to_palette16(pixel: &Rgba<u8>) -> Color {
+fn rgba_to_palette16(pixel: Rgba<u8>) -> Color {
     let r = pixel[0];
     let g = pixel[1];
     let b = pixel[2];
@@ -275,7 +271,7 @@ fn rgba_to_palette16(pixel: &Rgba<u8>) -> Color {
             if brightness > 200 {
                 Color::White
             } else if brightness > 160 {
-                Color::LightGray
+                Color::Gray
             } else {
                 Color::Gray
             }
@@ -284,7 +280,7 @@ fn rgba_to_palette16(pixel: &Rgba<u8>) -> Color {
 }
 
 /// Calculate brightness of a pixel (0.0 = black, 1.0 = white)
-fn calculate_brightness(pixel: &Rgba<u8>) -> f32 {
+fn calculate_brightness(pixel: Rgba<u8>) -> f32 {
     // Use perceived brightness formula
     let r = pixel[0] as f32 / 255.0;
     let g = pixel[1] as f32 / 255.0;
@@ -305,15 +301,15 @@ mod tests {
         let white = Rgba([255, 255, 255, 255]);
         let gray = Rgba([128, 128, 128, 255]);
         
-        assert_eq!(calculate_brightness(&black), 0.0);
-        assert_eq!(calculate_brightness(&white), 1.0);
-        assert!((calculate_brightness(&gray) - 0.5).abs() < 0.01);
+        assert_eq!(calculate_brightness(black), 0.0);
+        assert_eq!(calculate_brightness(white), 1.0);
+        assert!((calculate_brightness(gray) - 0.5).abs() < 0.01);
     }
     
     #[test]
     fn test_color_conversion() {
         let red_pixel = Rgba([255, 0, 0, 255]);
-        let color = rgba_to_color(&red_pixel);
+        let color = rgba_to_color(red_pixel);
         
         if let Color::Rgb(r, g, b) = color {
             assert_eq!(r, 255);
@@ -332,11 +328,11 @@ mod tests {
         let white_pixel = Rgba([255, 255, 255, 255]);
         let black_pixel = Rgba([0, 0, 0, 255]);
         
-        assert_eq!(rgba_to_palette16(&red_pixel), Color::Red);
-        assert_eq!(rgba_to_palette16(&green_pixel), Color::Green);
-        assert_eq!(rgba_to_palette16(&blue_pixel), Color::Blue);
-        assert_eq!(rgba_to_palette16(&white_pixel), Color::White);
-        assert_eq!(rgba_to_palette16(&black_pixel), Color::Black);
+        assert_eq!(rgba_to_palette16(red_pixel), Color::Red);
+        assert_eq!(rgba_to_palette16(green_pixel), Color::Green);
+        assert_eq!(rgba_to_palette16(blue_pixel), Color::Blue);
+        assert_eq!(rgba_to_palette16(white_pixel), Color::White);
+        assert_eq!(rgba_to_palette16(black_pixel), Color::Black);
     }
     
     #[test]
@@ -363,21 +359,21 @@ mod tests {
         
         let renderer = ImageRenderer::new(config);
         
-        // Test with a wide image (2:1 ratio)
-        let wide_img = DynamicImage::ImageRgb8(RgbImage::from_pixel(200, 100, Rgb([255, 255, 255])));
+        // Test with a wide image (3:1 ratio) - wider than the 2:1 area
+        let wide_img = DynamicImage::ImageRgb8(RgbImage::from_pixel(300, 100, Rgb([255, 255, 255])));
         let area = Rect::new(0, 0, 40, 20);
         let (width, height) = renderer.calculate_display_size(&wide_img, area);
-        
+
         // Should be limited by width
         assert_eq!(width, 40);
-        assert!(height < 20);
-        
-        // Test with a tall image (1:2 ratio)
-        let tall_img = DynamicImage::ImageRgb8(RgbImage::from_pixel(100, 200, Rgb([255, 255, 255])));
+        assert!(height < 20); // 40/3 ~= 13
+
+        // Test with a tall image (1:3 ratio) - taller than the 2:1 area
+        let tall_img = DynamicImage::ImageRgb8(RgbImage::from_pixel(100, 300, Rgb([255, 255, 255])));
         let (width, height) = renderer.calculate_display_size(&tall_img, area);
-        
+
         // Should be limited by height
-        assert!(width < 40);
+        assert!(width < 40); // 20/3 ~= 6
         assert_eq!(height, 20);
     }
 }

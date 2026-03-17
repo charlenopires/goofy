@@ -244,11 +244,11 @@ mod tests {
 
     #[test]
     fn test_parse_request_message() {
-        let header = "Content-Length: 123\\r\\n\\r\\n";
         let content = r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"processId":1234}}"#;
-        
-        let message = LspProtocol::parse_message(header, content).unwrap();
-        
+        let header = format!("Content-Length: {}\r\n\r\n", content.len());
+
+        let message = LspProtocol::parse_message(&header, content).unwrap();
+
         match message {
             LspMessage::Request { id, method, params } => {
                 assert_eq!(id, 1);
@@ -266,7 +266,7 @@ mod tests {
             method: "initialize".to_string(),
             params: Some(json!({"processId": 1234})),
         };
-        
+
         let serialized = LspProtocol::serialize_message(&message).unwrap();
         assert!(serialized.contains("Content-Length:"));
         assert!(serialized.contains("initialize"));
@@ -275,7 +275,7 @@ mod tests {
 
     #[test]
     fn test_extract_content_length() {
-        let header = "Content-Length: 123\\r\\nContent-Type: application/vscode-jsonrpc; charset=utf-8\\r\\n";
+        let header = "Content-Length: 123\r\nContent-Type: application/vscode-jsonrpc; charset=utf-8\r\n";
         let length = LspProtocol::extract_content_length(header).unwrap();
         assert_eq!(length, 123);
     }

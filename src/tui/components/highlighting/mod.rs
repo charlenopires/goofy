@@ -135,11 +135,18 @@ impl SyntaxHighlighter {
         if !self.config.enabled {
             return Ok(self.create_plain_content(code));
         }
-        
-        let syntax = self.detect_syntax(code, filename)?;
+
+        // Detect syntax and cache the name to avoid borrow issues
+        let syntax_name = {
+            let syntax = self.detect_syntax(code, filename)?;
+            syntax.name.clone()
+        };
+
+        let syntax = self.syntax_set.find_syntax_by_name(&syntax_name)
+            .unwrap_or_else(|| self.syntax_set.find_syntax_plain_text());
         let theme = self.get_current_theme()?;
-        
-        self.highlight_with_syntax(code, &syntax, &theme)
+
+        self.highlight_with_syntax(code, syntax, theme)
     }
     
     /// Highlight code with explicit language
@@ -147,11 +154,39 @@ impl SyntaxHighlighter {
         if !self.config.enabled {
             return Ok(self.create_plain_content(code));
         }
-        
+
+        // Try exact match first, then case-insensitive, then extension
         let syntax = self.syntax_set.find_syntax_by_name(language)
+            .or_else(|| {
+                // Try title-cased name (e.g., "rust" -> "Rust")
+                let title_case = {
+                    let mut c = language.chars();
+                    match c.next() {
+                        None => String::new(),
+                        Some(f) => f.to_uppercase().collect::<String>() + c.as_str(),
+                    }
+                };
+                self.syntax_set.find_syntax_by_name(&title_case)
+            })
             .or_else(|| self.syntax_set.find_syntax_by_extension(language))
-            .ok_or_else(|| anyhow::anyhow!("Unknown language: {}", language))?;
-        
+            .or_else(|| {
+                // Try common language name to extension mappings
+                let ext = match language.to_lowercase().as_str() {
+                    "rust" => Some("rs"),
+                    "python" => Some("py"),
+                    "javascript" => Some("js"),
+                    "typescript" => Some("ts"),
+                    "ruby" => Some("rb"),
+                    "csharp" | "c#" => Some("cs"),
+                    "cpp" | "c++" => Some("cpp"),
+                    "golang" | "go" => Some("go"),
+                    "shell" | "bash" | "sh" => Some("sh"),
+                    _ => None,
+                };
+                ext.and_then(|e| self.syntax_set.find_syntax_by_extension(e))
+            })
+            .unwrap_or_else(|| self.syntax_set.find_syntax_plain_text());
+
         let theme = self.get_current_theme()?;
         self.highlight_with_syntax(code, syntax, &theme)
     }
@@ -176,8 +211,11 @@ impl SyntaxHighlighter {
                 }
             }
             
-            // Try filename pattern matching
-            if let Some(syntax) = self.syntax_set.find_syntax_by_path(filename)? {
+            // Try filename pattern matching using find_syntax_for_file
+            if let Some(syntax) = self.syntax_set.find_syntax_for_file(filename)
+                .ok()
+                .flatten()
+            {
                 self.syntax_cache.insert(filename.to_string(), syntax.name.clone());
                 return Ok(syntax);
             }

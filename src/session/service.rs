@@ -16,10 +16,8 @@ use tokio::sync::{mpsc, RwLock};
 use tracing::{debug, info, error};
 use uuid::Uuid;
 
-use crate::session::{
-    database::{Database, SessionRow},
-    pubsub::{Broker, Event, EventType},
-};
+use crate::db::{Database, SessionRow};
+use crate::pubsub::{Broker, Event, EventType};
 
 /// Session model matching Crush's session structure
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -3,7 +3,7 @@
 //! This module provides a list component that supports real-time filtering
 //! with fuzzy search, match highlighting, and efficient search algorithms.
 
-use super::{FilterableItem, ListConfig, ListEvent, ListItem, VirtualList};
+use super::{FilterableItem, ListConfig, ListItem, VirtualList};
 use crate::tui::themes::Theme;
 use anyhow::Result;
 use crossterm::event::{KeyCode, KeyEvent};
@@ -11,7 +11,6 @@ use ratatui::{
     layout::Rect,
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::Clear,
 };
 use std::cmp::Ordering;
 use std::collections::HashMap;
@@ -379,58 +378,61 @@ impl<T: FilterableItem> FilterableList<T> {
     /// Apply the current filter to the items
     fn apply_filter(&mut self) -> Result<()> {
         let start_time = Instant::now();
-        
+
         if self.query.len() < self.search_config.min_query_length {
             // Show all items when query is too short
             let mut items = self.all_items.clone();
-            
+
             // Clear match indices
             for item in &mut items {
                 item.set_match_indices(Vec::new());
             }
-            
+
             self.virtual_list.set_items(items)?;
         } else {
-            // Check cache first
-            if let Some(cached) = self.search_cache.get(&self.query) {
-                if cached.timestamp.elapsed().as_millis() < 1000 {
-                    self.apply_cached_results(cached)?;
-                    return Ok(());
-                }
+            // Check cache first - clone cached result to avoid borrow conflict
+            let cached_result = self.search_cache.get(&self.query)
+                .filter(|cached| cached.timestamp.elapsed().as_millis() < 1000)
+                .cloned();
+
+            if let Some(cached) = cached_result {
+                self.apply_cached_results(&cached)?;
+                return Ok(());
             }
-            
-            // Perform search
+
+            // Perform search - clone query to avoid borrow conflict
+            let query = self.query.clone();
             let matches = if self.search_config.fuzzy_search {
-                self.fuzzy_search(&self.query)?
+                self.fuzzy_search(&query)?
             } else {
-                self.exact_search(&self.query)?
+                self.exact_search(&query)?
             };
-            
+
             // Cache results
             let result = SearchResult {
                 items: matches.clone(),
-                query: self.query.clone(),
+                query: query.clone(),
                 timestamp: start_time,
             };
-            self.search_cache.insert(self.query.clone(), result);
-            
+            self.search_cache.insert(query, result);
+
             // Apply results
             let mut filtered_items = Vec::new();
             for search_match in matches {
                 let mut item = self.all_items[search_match.item_index].clone();
                 item.set_match_indices(search_match.match_positions);
                 filtered_items.push(item);
-                
+
                 if let Some(max_results) = self.search_config.max_results {
                     if filtered_items.len() >= max_results {
                         break;
                     }
                 }
             }
-            
+
             self.virtual_list.set_items(filtered_items)?;
         }
-        
+
         self.last_search_time = Some(start_time);
         Ok(())
     }
@@ -592,13 +594,15 @@ impl<T: FilterableItem> FilterableList<T> {
             }
         } else {
             let (before_cursor, after_cursor) = self.query.split_at(self.filter_cursor);
-            
+            let before_cursor = before_cursor.to_string();
+            let after_cursor = after_cursor.to_string();
+
             // Text before cursor
             spans.push(Span::styled(
                 before_cursor,
                 Style::default().fg(theme.colors.text),
             ));
-            
+
             // Cursor
             if self.filter_focused {
                 spans.push(Span::styled(
@@ -608,7 +612,7 @@ impl<T: FilterableItem> FilterableList<T> {
                         .add_modifier(Modifier::RAPID_BLINK),
                 ));
             }
-            
+
             // Text after cursor
             spans.push(Span::styled(
                 after_cursor,
@@ -718,7 +722,7 @@ mod tests {
     
     #[test]
     fn test_filter_input_handling() {
-        let mut list = FilterableList::new();
+        let mut list: FilterableList<SimpleFilterableItem> = FilterableList::new();
         list.set_filter_focused(true);
         
         // Test character input

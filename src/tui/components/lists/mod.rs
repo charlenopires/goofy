@@ -18,9 +18,7 @@ pub use selection::*;
 pub use lazy_loading::*;
 pub use pagination::*;
 
-use anyhow::Result;
 use ratatui::{
-    layout::Rect,
     style::Style,
     text::Line,
 };

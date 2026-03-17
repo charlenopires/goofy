@@ -31,7 +31,6 @@ pub const MAX_ATTACHMENT_SIZE: u64 = 5 * 1024 * 1024;
 pub const IMAGE_EXTENSIONS: &[&str] = &["jpg", "jpeg", "png", "gif", "svg"];
 
 /// File picker component
-#[derive(Debug)]
 pub struct FilePicker {
     /// Current directory
     current_directory: PathBuf,
@@ -151,6 +150,23 @@ enum FilePickerState {
     
     /// Error state
     Error,
+}
+
+impl std::fmt::Debug for FilePicker {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("FilePicker")
+            .field("current_directory", &self.current_directory)
+            .field("items", &self.items.len())
+            .field("selected_index", &self.selected_index)
+            .field("config", &self.config)
+            .field("is_loading", &self.is_loading)
+            .field("error_message", &self.error_message)
+            .field("callbacks", &format!("[{} callbacks]", self.callbacks.len()))
+            .field("state", &self.state)
+            .field("area", &self.area)
+            .field("has_focus", &self.has_focus)
+            .finish()
+    }
 }
 
 impl FilePicker {
@@ -402,11 +418,24 @@ impl FilePicker {
         Ok(())
     }
     
+    /// Get the item ID for a given index
+    fn item_id_at(&self, index: usize) -> Option<String> {
+        use crate::tui::components::lists::ListItem;
+        self.items.get(index).map(|item| item.id())
+    }
+
+    /// Select the item at the given index in the virtual list
+    fn select_virtual_list_item(&mut self, index: usize) {
+        if let Some(id) = self.item_id_at(index) {
+            let _ = self.virtual_list.set_selected(Some(id));
+        }
+    }
+
     /// Move selection up
     fn move_selection_up(&mut self) {
         if self.selected_index > 0 {
             self.selected_index -= 1;
-            self.virtual_list.set_selected(Some(self.selected_index));
+            self.select_virtual_list_item(self.selected_index);
             self.update_preview();
         }
     }
@@ -415,7 +444,7 @@ impl FilePicker {
     fn move_selection_down(&mut self) {
         if self.selected_index < self.items.len().saturating_sub(1) {
             self.selected_index += 1;
-            self.virtual_list.set_selected(Some(self.selected_index));
+            self.select_virtual_list_item(self.selected_index);
             self.update_preview();
         }
     }
@@ -472,7 +501,7 @@ impl FilePicker {
         
         // Update virtual list selection
         if !self.items.is_empty() {
-            self.virtual_list.set_selected(Some(self.selected_index));
+            self.select_virtual_list_item(self.selected_index);
         }
     }
     
@@ -518,6 +547,7 @@ impl FilePicker {
     }
 }
 
+#[async_trait::async_trait]
 impl Component for FilePicker {
     async fn handle_key_event(&mut self, event: KeyEvent) -> Result<()> {
         if !self.has_focus {
@@ -547,27 +577,27 @@ impl Component for FilePicker {
             KeyCode::Home => {
                 self.selected_index = 0;
                 if !self.items.is_empty() {
-                    self.virtual_list.set_selected(Some(0));
+                    self.select_virtual_list_item(0);
                     self.update_preview();
                 }
             }
             KeyCode::End => {
                 if !self.items.is_empty() {
                     self.selected_index = self.items.len() - 1;
-                    self.virtual_list.set_selected(Some(self.selected_index));
+                    self.select_virtual_list_item(self.selected_index);
                     self.update_preview();
                 }
             }
             KeyCode::PageUp => {
                 let page_size = self.area.height as usize / 2;
                 self.selected_index = self.selected_index.saturating_sub(page_size);
-                self.virtual_list.set_selected(Some(self.selected_index));
+                self.select_virtual_list_item(self.selected_index);
                 self.update_preview();
             }
             KeyCode::PageDown => {
                 let page_size = self.area.height as usize / 2;
                 self.selected_index = (self.selected_index + page_size).min(self.items.len().saturating_sub(1));
-                self.virtual_list.set_selected(Some(self.selected_index));
+                self.select_virtual_list_item(self.selected_index);
                 self.update_preview();
             }
             _ => {}
@@ -637,7 +667,11 @@ impl Component for FilePicker {
         };
         
         self.render_file_list(list_area, theme);
-        self.virtual_list.render(frame, list_area, theme);
+        if let Ok(lines) = self.virtual_list.render(theme) {
+            let text = ratatui::text::Text::from(lines);
+            let paragraph = ratatui::widgets::Paragraph::new(text);
+            frame.render_widget(paragraph, list_area);
+        }
         
         // Render preview panel
         if let Some(preview_area) = preview_area {

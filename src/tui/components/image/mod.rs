@@ -403,7 +403,7 @@ impl Widget for ImageWidget {
         };
         
         // Render the image content
-        if let Ok(lines) = self.render(inner_area) {
+        if let Ok(lines) = ImageWidget::render(&self, inner_area) {
             for (i, line) in lines.iter().enumerate() {
                 if i as u16 >= inner_area.height {
                     break;

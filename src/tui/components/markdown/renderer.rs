@@ -24,8 +24,9 @@ pub struct MarkdownRenderer {
 impl MarkdownRenderer {
     /// Create a new markdown renderer
     pub fn new(config: &MarkdownConfig, styles: MarkdownStyles) -> Self {
-        let highlighter = SyntaxHighlighter::new(config.highlight_config.clone());
-        
+        let highlighter = SyntaxHighlighter::with_config(config.highlight_config.clone())
+            .unwrap_or_else(|_| SyntaxHighlighter::new().expect("Failed to create syntax highlighter"));
+
         Self {
             config: config.clone(),
             styles,
@@ -224,7 +225,7 @@ impl MarkdownRenderer {
             self.styles.text
         };
         
-        let span = Span::styled(text.into_owned(), style);
+        let span = Span::styled(text.to_string(), style);
         context.current_line.push(span);
         
         Ok(())
@@ -243,7 +244,7 @@ impl MarkdownRenderer {
     /// Handle HTML content
     fn handle_html(&self, html: CowStr, context: &mut RenderContext) -> Result<()> {
         // For now, just treat HTML as plain text
-        let span = Span::styled(html.into_owned(), self.styles.text);
+        let span = Span::styled(html.to_string(), self.styles.text);
         context.current_line.push(span);
         Ok(())
     }

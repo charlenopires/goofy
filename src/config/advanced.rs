@@ -635,9 +635,16 @@ impl AdvancedConfigManager {
     
     /// Validate configuration
     pub fn validate(&self) -> Result<()> {
+        // Well-known default providers that don't need explicit configuration
+        let well_known_providers = ["openai", "anthropic", "ollama", "azure"];
+
         // Check that all selected models have corresponding providers
         for (model_type, selected_model) in &self.config.models {
-            if !self.config.providers.contains_key(&selected_model.provider) {
+            let provider_id = &selected_model.provider;
+            // Provider is valid if it's in the explicit config OR is a well-known default
+            let is_configured = self.config.providers.contains_key(provider_id);
+            let is_well_known = well_known_providers.contains(&provider_id.as_str());
+            if !is_configured && !is_well_known {
                 return Err(anyhow::anyhow!(
                     "Model {:?} references unknown provider: {}",
                     model_type,
@@ -857,6 +864,24 @@ mod tests {
         // Should validate successfully with default config
         assert!(manager.validate().is_ok());
         
+        // Add a known provider so that model-provider validation is exercised
+        config.providers.insert(
+            "openai".to_string(),
+            ProviderConfig {
+                id: "openai".to_string(),
+                name: "OpenAI".to_string(),
+                base_url: None,
+                provider_type: "openai".to_string(),
+                api_key: None,
+                disabled: false,
+                system_prompt_prefix: None,
+                extra_headers: HashMap::new(),
+                extra_body: HashMap::new(),
+                timeout: 30,
+                retries: 3,
+            },
+        );
+
         // Add a model with unknown provider
         config.models.insert(
             ModelType::Large,
@@ -869,7 +894,7 @@ mod tests {
                 reasoning_effort: None,
             },
         );
-        
+
         let manager = AdvancedConfigManager { config, config_path: PathBuf::from("test") };
         assert!(manager.validate().is_err());
     }

@@ -64,6 +64,11 @@ impl Message {
         Self::new_text(MessageRole::Assistant, text)
     }
     
+    /// Alias for `timestamp` to match component expectations
+    pub fn created_at(&self) -> DateTime<Utc> {
+        self.timestamp
+    }
+
     pub fn get_text_content(&self) -> Option<String> {
         self.content.iter()
             .filter_map(|block| match block {
@@ -188,4 +193,25 @@ pub struct ChatRequest {
     pub top_p: Option<f32>,
     pub stream: bool,
     pub metadata: HashMap<String, serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tool_choice: Option<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stop: Option<Vec<String>>,
+}
+
+impl Default for ChatRequest {
+    fn default() -> Self {
+        Self {
+            messages: Vec::new(),
+            tools: Vec::new(),
+            system_message: None,
+            max_tokens: None,
+            temperature: None,
+            top_p: None,
+            stream: false,
+            metadata: HashMap::new(),
+            tool_choice: None,
+            stop: None,
+        }
+    }
 }

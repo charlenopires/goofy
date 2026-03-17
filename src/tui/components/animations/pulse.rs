@@ -5,10 +5,13 @@
 
 use super::animation_engine::{AnimationEngine, AnimationConfig, EasingType};
 use super::interpolation::{RgbColor, Interpolatable};
+use super::{Animation, AnimationState};
+use crate::tui::themes::Theme;
 use anyhow::Result;
+use ratatui::layout::Rect;
 use ratatui::style::{Color, Style, Modifier};
 use ratatui::text::{Span, Line};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 /// Pulse animation styles
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -162,6 +165,7 @@ pub struct PulseAnimation {
     animation: AnimationEngine,
     content: String,
     is_active: bool,
+    anim_state: AnimationState,
 }
 
 impl PulseAnimation {
@@ -175,9 +179,12 @@ impl PulseAnimation {
             PulseStyle::Flash => EasingType::EaseInOutQuart,
         };
 
-        let animation_config = AnimationConfig::new(config.duration)
-            .with_easing(easing)
-            .with_reverse(config.reverse);
+        let mut animation_config = AnimationConfig::new(config.duration)
+            .with_easing(easing);
+
+        if config.reverse {
+            animation_config = animation_config.with_reverse();
+        }
 
         let animation_config = if let Some(count) = config.loop_count {
             animation_config.with_loop_count(count)
@@ -190,6 +197,7 @@ impl PulseAnimation {
             animation: AnimationEngine::new(animation_config),
             content,
             is_active: false,
+            anim_state: AnimationState::Idle,
         }
     }
 
@@ -197,12 +205,17 @@ impl PulseAnimation {
     pub fn start(&mut self) {
         self.animation.start();
         self.is_active = true;
+        self.anim_state = AnimationState::Running {
+            start_time: Instant::now(),
+            current_frame: 0,
+        };
     }
 
     /// Stop the pulse animation
     pub fn stop(&mut self) {
         self.animation.stop();
         self.is_active = false;
+        self.anim_state = AnimationState::Complete;
     }
 
     /// Pause the pulse animation
@@ -367,6 +380,47 @@ impl PulseAnimation {
     }
 }
 
+impl Animation for PulseAnimation {
+    fn start(&mut self) -> Result<()> {
+        self.animation.start();
+        self.is_active = true;
+        self.anim_state = AnimationState::Running {
+            start_time: Instant::now(),
+            current_frame: 0,
+        };
+        Ok(())
+    }
+
+    fn stop(&mut self) -> Result<()> {
+        self.animation.stop();
+        self.is_active = false;
+        self.anim_state = AnimationState::Complete;
+        Ok(())
+    }
+
+    fn update(&mut self) -> Result<()> {
+        if self.is_active {
+            self.animation.should_update();
+            if self.is_completed() {
+                self.anim_state = AnimationState::Complete;
+            }
+        }
+        Ok(())
+    }
+
+    fn is_complete(&self) -> bool {
+        self.is_completed()
+    }
+
+    fn state(&self) -> &AnimationState {
+        &self.anim_state
+    }
+
+    fn render(&self, _area: Rect, _theme: &Theme) -> Vec<Line> {
+        vec![PulseAnimation::render(self)]
+    }
+}
+
 /// Multi-element pulse coordinator for synchronized effects
 #[derive(Debug)]
 pub struct PulseCoordinator {
@@ -394,11 +448,9 @@ impl PulseCoordinator {
     /// Add a pulse animation
     pub fn add_pulse(&mut self, id: String, mut pulse: PulseAnimation) {
         if self.global_sync {
-            // Delay start for synchronization
-            tokio::spawn(async move {
-                tokio::time::sleep(self.sync_offset).await;
-                pulse.start();
-            });
+            // Note: synchronization offset is tracked but pulse is started immediately.
+            // For true delayed start, the caller should handle timing externally.
+            pulse.start();
         }
         self.pulses.insert(id, pulse);
     }

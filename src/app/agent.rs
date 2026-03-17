@@ -51,6 +51,8 @@ impl Agent {
             top_p: None,
             stream: false,
             metadata: std::collections::HashMap::new(),
+            tool_choice: None,
+            stop: None,
         };
         
         match self.provider.chat_completion(request).await {
@@ -98,6 +100,8 @@ impl Agent {
             top_p: None,
             stream: true,
             metadata: std::collections::HashMap::new(),
+            tool_choice: None,
+            stop: None,
         };
         
         let (tx, rx) = mpsc::unbounded_channel();

@@ -88,7 +88,7 @@ impl FileHistoryServiceImpl {
     fn publish(&self, event_type: EventType, file: File) {
         let event = Event {
             event_type,
-            data: file,
+            payload: file,
         };
         let _ = self.sender.send(event);
     }
@@ -174,23 +174,24 @@ impl FileHistoryService for FileHistoryServiceImpl {
     
     async fn create_version(&self, session_id: &str, path: &str, content: &str) -> Result<File> {
         // Get the latest version for this path
-        let conn = self.db.connection().await?;
-        let conn = conn.lock().await;
-        
-        let mut stmt = conn.prepare(
-            "SELECT version FROM files 
-             WHERE path = ?1 AND session_id = ?2 
-             ORDER BY version DESC, created_at DESC 
-             LIMIT 1"
-        )?;
-        
-        let latest_version: Option<i64> = stmt.query_row(
-            rusqlite::params![path, session_id],
-            |row| row.get(0),
-        ).ok();
-        
-        let next_version = latest_version.unwrap_or(INITIAL_VERSION) + 1;
-        drop(conn); // Release lock before async call
+        let next_version = {
+            let conn = self.db.connection().await?;
+            let conn = conn.lock().await;
+            
+            let mut stmt = conn.prepare(
+                "SELECT version FROM files 
+                 WHERE path = ?1 AND session_id = ?2 
+                 ORDER BY version DESC, created_at DESC 
+                 LIMIT 1"
+            )?;
+            
+            let latest_version: Option<i64> = stmt.query_row(
+                rusqlite::params![path, session_id],
+                |row| row.get(0),
+            ).ok();
+            
+            latest_version.unwrap_or(INITIAL_VERSION) + 1
+        }; // conn is dropped here
         
         self.create_with_version(session_id, path, content, next_version).await
     }

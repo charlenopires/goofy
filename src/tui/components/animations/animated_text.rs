@@ -6,7 +6,7 @@
 use super::{Animation, AnimationConfig, AnimationState, EasingType};
 use super::fade::FadeAnimation;
 use super::pulse::PulseAnimation;
-use super::interpolation::RgbColor;
+use super::interpolation::{RgbColor, Interpolatable};
 use crate::tui::themes::Theme;
 use anyhow::Result;
 use ratatui::{
@@ -294,7 +294,8 @@ impl AnimatedText {
                 }
                 
                 if let Some(highlight) = &self.config.highlight_color {
-                    let base_color = self.config.color.as_ref().unwrap_or(&RgbColor::new(255, 255, 255));
+                    let default_color = RgbColor::new(255, 255, 255);
+                    let base_color = self.config.color.as_ref().unwrap_or(&default_color);
                     let glowing_color = base_color.interpolate(highlight, glow_intensity);
                     style = style.fg(glowing_color.to_color());
                 }
@@ -381,42 +382,42 @@ impl Animation for AnimatedText {
     }
 
     fn update(&mut self) -> Result<()> {
-        match &self.state {
+        let (elapsed, st) = match &self.state {
             AnimationState::Running { start_time, .. } => {
-                let elapsed = start_time.elapsed();
-                
-                if elapsed >= self.config.duration {
-                    if self.config.loop_animation {
-                        // Restart animation
-                        self.state = AnimationState::Running {
-                            start_time: Instant::now(),
-                            current_frame: 0,
-                        };
-                        self.start_time = Some(Instant::now());
-                        self.visible_chars = 0;
-                    } else {
-                        self.state = AnimationState::Complete;
-                        self.visible_chars = self.text.chars().count();
-                    }
-                } else {
-                    self.update_visible_chars(elapsed);
-                    
-                    // Update frame count
-                    let frame_count = (elapsed.as_millis() / 16) as u32; // ~60 FPS
-                    self.state = AnimationState::Running {
-                        start_time: *start_time,
-                        current_frame: frame_count,
-                    };
-                }
+                (start_time.elapsed(), *start_time)
             }
-            _ => {}
+            _ => return Ok(()),
+        };
+
+        if elapsed >= self.config.duration {
+            if self.config.loop_animation {
+                // Restart animation
+                self.state = AnimationState::Running {
+                    start_time: Instant::now(),
+                    current_frame: 0,
+                };
+                self.start_time = Some(Instant::now());
+                self.visible_chars = 0;
+            } else {
+                self.state = AnimationState::Complete;
+                self.visible_chars = self.text.chars().count();
+            }
+        } else {
+            self.update_visible_chars(elapsed);
+
+            // Update frame count
+            let frame_count = (elapsed.as_millis() / 16) as u32; // ~60 FPS
+            self.state = AnimationState::Running {
+                start_time: st,
+                current_frame: frame_count,
+            };
         }
-        
+
         Ok(())
     }
 
     fn is_complete(&self) -> bool {
-        matches!(self.state, AnimationState::Complete)
+        matches!(self.state, AnimationState::Complete | AnimationState::Idle)
     }
 
     fn state(&self) -> &AnimationState {
@@ -544,7 +545,7 @@ impl TextSequence {
     }
 
     pub fn is_complete(&self) -> bool {
-        !self.is_active && self.current_index >= self.animations.len()
+        !self.is_active
     }
 }
 

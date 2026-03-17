@@ -139,6 +139,19 @@ pub enum EasingType {
     Elastic,
     /// Back effect (overshoot)
     Back,
+    // Extended easing variants
+    EaseInBack,
+    EaseOutBack,
+    EaseInOutBack,
+    EaseInQuad,
+    EaseOutQuad,
+    EaseInCubic,
+    EaseOutCubic,
+    EaseInOutCubic,
+    EaseInQuart,
+    EaseOutQuart,
+    EaseOutBounce,
+    EaseOutElastic,
 }
 
 impl EasingType {
@@ -180,10 +193,62 @@ impl EasingType {
                     -(2.0_f32.powf(10.0 * progress - 10.0)) * ((progress * 10.0 - 10.75) * c4).sin()
                 }
             }
-            EasingType::Back => {
+            EasingType::Back | EasingType::EaseInBack => {
                 let c1 = 1.70158;
                 let c3 = c1 + 1.0;
                 c3 * progress * progress * progress - c1 * progress * progress
+            }
+            EasingType::EaseOutBack => {
+                let c1 = 1.70158;
+                let c3 = c1 + 1.0;
+                let p = progress - 1.0;
+                1.0 + c3 * p * p * p + c1 * p * p
+            }
+            EasingType::EaseInOutBack => {
+                let c1 = 1.70158;
+                let c2 = c1 * 1.525;
+                if progress < 0.5 {
+                    (2.0 * progress).powi(2) * ((c2 + 1.0) * 2.0 * progress - c2) / 2.0
+                } else {
+                    ((2.0 * progress - 2.0).powi(2) * ((c2 + 1.0) * (progress * 2.0 - 2.0) + c2) + 2.0) / 2.0
+                }
+            }
+            EasingType::EaseInQuad => progress * progress,
+            EasingType::EaseOutQuad => 1.0 - (1.0 - progress) * (1.0 - progress),
+            EasingType::EaseInCubic => progress * progress * progress,
+            EasingType::EaseOutCubic => 1.0 - (1.0 - progress).powi(3),
+            EasingType::EaseInOutCubic => {
+                if progress < 0.5 {
+                    4.0 * progress * progress * progress
+                } else {
+                    1.0 - (-2.0 * progress + 2.0).powi(3) / 2.0
+                }
+            }
+            EasingType::EaseInQuart => progress * progress * progress * progress,
+            EasingType::EaseOutQuart => 1.0 - (1.0 - progress).powi(4),
+            EasingType::EaseOutBounce => {
+                let n1 = 7.5625;
+                let d1 = 2.75;
+                if progress < 1.0 / d1 {
+                    n1 * progress * progress
+                } else if progress < 2.0 / d1 {
+                    let p = progress - 1.5 / d1;
+                    n1 * p * p + 0.75
+                } else if progress < 2.5 / d1 {
+                    let p = progress - 2.25 / d1;
+                    n1 * p * p + 0.9375
+                } else {
+                    let p = progress - 2.625 / d1;
+                    n1 * p * p + 0.984375
+                }
+            }
+            EasingType::EaseOutElastic => {
+                if progress == 0.0 || progress == 1.0 {
+                    progress
+                } else {
+                    let c4 = (2.0 * std::f32::consts::PI) / 3.0;
+                    2.0_f32.powf(-10.0 * progress) * ((progress * 10.0 - 0.75) * c4).sin() + 1.0
+                }
             }
         }
     }
@@ -220,11 +285,19 @@ impl Default for AnimationConfig {
 }
 
 impl AnimationConfig {
-    /// Create a new animation configuration with default values
+    /// Create a new animation configuration with default values or specific duration
     pub fn new() -> Self {
         Self::default()
     }
-    
+
+    /// Create with a specific duration
+    pub fn from_duration(dur: Duration) -> Self {
+        Self {
+            duration: dur,
+            ..Self::default()
+        }
+    }
+
     /// Set the duration of the animation
     pub fn duration(mut self, duration: Duration) -> Self {
         self.duration = duration;
@@ -235,6 +308,11 @@ impl AnimationConfig {
     pub fn easing(mut self, easing: EasingType) -> Self {
         self.easing = easing;
         self
+    }
+
+    /// Alias for `easing()` - set the easing function
+    pub fn with_easing(self, easing: EasingType) -> Self {
+        self.easing(easing)
     }
     
     /// Set whether the animation should repeat
@@ -390,7 +468,7 @@ impl AnimationManager {
 }
 
 /// Base trait for all animations
-pub trait Animation {
+pub trait Animation: std::fmt::Debug {
     /// Start the animation
     fn start(&mut self) -> Result<()>;
     

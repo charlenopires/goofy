@@ -30,11 +30,13 @@ impl DatabaseManager {
             debug!("Foreign key constraints disabled for compatibility");
         }
         
-        // Set other performance pragmas
-        conn.execute("PRAGMA journal_mode = WAL", [])?;
-        conn.execute("PRAGMA synchronous = NORMAL", [])?;
-        conn.execute("PRAGMA cache_size = 1000", [])?;
-        conn.execute("PRAGMA temp_store = memory", [])?;
+        // Set other performance pragmas (use execute_batch since some return results)
+        conn.execute_batch(
+            "PRAGMA journal_mode = WAL;
+             PRAGMA synchronous = NORMAL;
+             PRAGMA cache_size = 1000;
+             PRAGMA temp_store = memory;"
+        )?;
         
         let mut db = Self { 
             conn,

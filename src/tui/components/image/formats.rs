@@ -239,18 +239,18 @@ impl FormatRegistry {
         
         for (format, info) in &self.formats {
             if info.extensions.contains(&ext_lower.as_str()) {
-                return Some(*format, info);
+                return Some((*format, info));
             }
         }
-        
+
         None
     }
-    
+
     /// Find format by MIME type
     pub fn find_by_mime_type(&self, mime_type: &str) -> Option<(ImageFormat, &FormatInfo)> {
         for (format, info) in &self.formats {
             if info.mime_type == mime_type {
-                return Some(*format, info);
+                return Some((*format, info));
             }
         }
         

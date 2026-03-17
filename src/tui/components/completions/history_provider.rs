@@ -66,8 +66,8 @@ impl HistoryProvider {
             }
 
             // Extract words and phrases from the message
-            let text = &message.content;
-            self.extract_patterns_from_text(text, &mut patterns, message.created_at);
+            let text = message.get_text_content().unwrap_or_default();
+            self.extract_patterns_from_text(&text, &mut patterns, message.timestamp.timestamp());
         }
 
         patterns
@@ -147,7 +147,7 @@ impl HistoryProvider {
     fn looks_like_command(&self, text: &str) -> bool {
         // Simple heuristics for command detection
         text.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-') &&
-        !text.chars().all(|c| c.is_ascii_uppercase()) && // Not all caps (likely constant)
+        !text.chars().filter(|c| c.is_alphabetic()).all(|c| c.is_ascii_uppercase()) && // Not all caps (likely constant)
         text.len() >= 2 && text.len() <= 20
     }
 
@@ -174,7 +174,7 @@ impl HistoryProvider {
         }
 
         // Sort by timestamp and take most recent
-        all_messages.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+        all_messages.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
         all_messages.truncate(self.max_history_items);
 
         Ok(all_messages)
@@ -396,7 +396,7 @@ impl CompletionProvider for HistoryProvider {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::session::{Message, MessageRole};
+    use crate::llm::{Message, MessageRole, ContentBlock};
 
     #[test]
     fn test_pattern_extraction() {
@@ -477,20 +477,18 @@ mod tests {
         
         let messages = vec![
             Message {
-                id: 1,
-                conversation_id: 1,
+                id: "1".to_string(),
                 role: MessageRole::User,
-                content: "cargo build --release".to_string(),
-                created_at: 1234567890,
-                metadata: None,
+                content: vec![ContentBlock::Text { text: "cargo build --release".to_string() }],
+                timestamp: chrono::Utc::now(),
+                metadata: std::collections::HashMap::new(),
             },
             Message {
-                id: 2,
-                conversation_id: 1,
+                id: "2".to_string(),
                 role: MessageRole::User,
-                content: "git commit -m 'update'".to_string(),
-                created_at: 1234567891,
-                metadata: None,
+                content: vec![ContentBlock::Text { text: "git commit -m 'update'".to_string() }],
+                timestamp: chrono::Utc::now(),
+                metadata: std::collections::HashMap::new(),
             },
         ];
 

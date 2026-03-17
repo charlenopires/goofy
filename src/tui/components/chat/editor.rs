@@ -389,14 +389,14 @@ impl ChatEditor {
 
     /// Insert new line
     pub fn insert_newline(&mut self) {
-        let current_line = &self.lines[self.cursor_line];
-        let (before, after) = current_line.split_at(self.cursor_column);
-        
-        self.lines[self.cursor_line] = before.to_string();
-        self.lines.insert(self.cursor_line + 1, after.to_string());
+        let before = self.lines[self.cursor_line][..self.cursor_column].to_string();
+        let after = self.lines[self.cursor_line][self.cursor_column..].to_string();
+
+        self.lines[self.cursor_line] = before;
+        self.lines.insert(self.cursor_line + 1, after);
         self.cursor_line += 1;
         self.cursor_column = 0;
-        
+
         self.update_content_from_lines();
         self.invalidate_cache();
         self.last_activity = Instant::now();
@@ -503,25 +503,25 @@ impl ChatEditor {
             self.insert_text(text);
         } else {
             // Multi-line paste
-            let current_line = &self.lines[self.cursor_line];
-            let (before, after) = current_line.split_at(self.cursor_column);
-            
+            let before = self.lines[self.cursor_line][..self.cursor_column].to_string();
+            let after = self.lines[self.cursor_line][self.cursor_column..].to_string();
+
             // Replace current line with first part + first line of paste
             self.lines[self.cursor_line] = format!("{}{}", before, lines[0]);
-            
+
             // Insert middle lines
             for (i, line) in lines.iter().enumerate().skip(1).take(lines.len() - 2) {
                 self.lines.insert(self.cursor_line + i, line.to_string());
             }
-            
+
             // Insert last line + remaining part of original line
             if lines.len() > 1 {
-                let last_line = format!("{}{}", lines.last().unwrap(), after);
+                let last_line = format!("{}{}", lines.last().unwrap(), &after);
                 self.lines.insert(self.cursor_line + lines.len() - 1, last_line);
                 self.cursor_line += lines.len() - 1;
                 self.cursor_column = lines.last().unwrap().len();
             }
-            
+
             self.update_content_from_lines();
             self.invalidate_cache();
         }
@@ -635,9 +635,9 @@ impl ChatEditor {
         for i in 0..line_count {
             let line_num = i + self.scroll_offset + 1;
             let style = if i + self.scroll_offset == self.cursor_line {
-                theme.styles.editor_line_number.add_modifier(Modifier::BOLD)
+                theme.styles.text_area_line_number.add_modifier(Modifier::BOLD)
             } else {
-                theme.styles.editor_line_number
+                theme.styles.text_area_line_number
             };
             
             lines.push(Line::from(Span::styled(
@@ -652,45 +652,47 @@ impl ChatEditor {
     fn render_content_lines(&self, visible_height: usize) -> Vec<Line<'static>> {
         let theme = self.theme_manager.current_theme();
         let mut lines = Vec::new();
-        
+
         let start_line = self.scroll_offset;
         let end_line = (start_line + visible_height).min(self.lines.len());
-        
+
         for line_idx in start_line..end_line {
-            let line_content = &self.lines[line_idx];
-            let mut spans = Vec::new();
-            
+            let line_content = self.lines[line_idx].clone();
+            let spans;
+
             if self.syntax_highlighting && self.mode == EditorMode::Normal {
                 // Simple syntax highlighting for common patterns
-                spans = self.highlight_syntax(line_content);
+                spans = self.highlight_syntax(&line_content);
             } else {
                 spans = vec![Span::styled(line_content.clone(), theme.styles.text)];
             }
-            
+
+            let mut final_spans = spans;
+
             // Add cursor if on this line
             if line_idx == self.cursor_line && self.should_show_cursor() {
                 // Insert cursor span at correct position
                 if self.cursor_column <= line_content.len() {
                     let cursor_char = if self.cursor_column == line_content.len() {
-                        " "
+                        " ".to_string()
                     } else {
-                        &line_content[self.cursor_column..self.cursor_column + 1]
+                        line_content[self.cursor_column..self.cursor_column + 1].to_string()
                     };
-                    
+
                     // This is a simplified cursor rendering - in practice you'd need
                     // to split the spans at the cursor position
-                    spans.push(Span::styled(cursor_char, theme.styles.editor_cursor));
+                    final_spans.push(Span::styled(cursor_char, theme.styles.text_area_cursor_line));
                 }
             }
-            
-            lines.push(Line::from(spans));
+
+            lines.push(Line::from(final_spans));
         }
-        
+
         // Fill remaining space with empty lines
         while lines.len() < visible_height {
             lines.push(Line::from(Span::raw("")));
         }
-        
+
         lines
     }
 
@@ -964,7 +966,7 @@ impl Component for ChatEditor {
                 // Render line numbers
                 let line_number_lines = self.render_line_numbers(visible_height);
                 let line_numbers_paragraph = Paragraph::new(Text::from(line_number_lines))
-                    .style(theme.styles.editor_line_number);
+                    .style(theme.styles.text_area_line_number);
                 frame.render_widget(line_numbers_paragraph, content_chunks[0]);
 
                 // Render content

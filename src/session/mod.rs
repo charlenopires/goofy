@@ -7,7 +7,7 @@ mod session;
 mod conversation;
 mod database;
 mod service;
-mod pubsub;
+pub mod pubsub;
 mod db_manager;
 mod db_factory;
 

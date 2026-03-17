@@ -1,11 +1,11 @@
 //! Database-backed session manager
-//!
+//! 
 //! This module provides a session manager that uses the new database
 //! module for persistent storage, matching Crush's implementation.
 
 use anyhow::{Result, Context};
 use std::sync::Arc;
-use tokio::sync::RwLock;
+use tokio::sync::{Mutex, RwLock};
 use uuid::Uuid;
 use chrono::Utc;
 use tracing::{info, debug, error};
@@ -19,8 +19,8 @@ use rusqlite::Connection;
 
 /// Database-backed session manager
 pub struct DatabaseSessionManager {
-    conn: Arc<RwLock<Connection>>,
-    current_session_id: Arc<RwLock<Option<String>>>,
+    conn: Arc<Mutex<Connection>>,
+    current_session_id: Arc<RwLock<Option<String>>>
 }
 
 impl DatabaseSessionManager {
@@ -30,7 +30,7 @@ impl DatabaseSessionManager {
         let conn = connect(config)?;
         
         Ok(Self {
-            conn: Arc::new(RwLock::new(conn)),
+            conn: Arc::new(Mutex::new(conn)),
             current_session_id: Arc::new(RwLock::new(None)),
         })
     }
@@ -39,14 +39,16 @@ impl DatabaseSessionManager {
     pub async fn create_session(&self, title: String) -> Result<DbSession> {
         let session_id = Uuid::new_v4().to_string();
         let session = DbSession::new(session_id.clone(), title);
-        
-        let conn = self.conn.read().await;
-        let queries = Queries::new(&conn);
-        queries.create_session(&session)?;
-        
+
+        {
+            let conn = self.conn.lock().await;
+            let queries = Queries::new(&conn);
+            queries.create_session(&session)?;
+        }
+
         // Set as current session
         *self.current_session_id.write().await = Some(session_id.clone());
-        
+
         info!("Created new session: {}", session_id);
         Ok(session)
     }
@@ -56,17 +58,17 @@ impl DatabaseSessionManager {
         let session_id = Uuid::new_v4().to_string();
         let session = DbSession::new_child(session_id.clone(), parent_id, title);
         
-        let conn = self.conn.read().await;
+        let conn = self.conn.lock().await;
         let queries = Queries::new(&conn);
         queries.create_session(&session)?;
         
-        info!("Created child session: {} (parent: {})", session_id, session.parent_session_id.as_ref().unwrap());
+        info!("Created child session: {} (parent: { })", session_id, session.parent_session_id.as_ref().unwrap());
         Ok(session)
     }
     
     /// Get a session by ID
     pub async fn get_session(&self, id: &str) -> Result<Option<DbSession>> {
-        let conn = self.conn.read().await;
+        let conn = self.conn.lock().await;
         let queries = Queries::new(&conn);
         queries.get_session(id)
     }
@@ -95,14 +97,14 @@ impl DatabaseSessionManager {
     
     /// List all sessions
     pub async fn list_sessions(&self, limit: Option<usize>) -> Result<Vec<DbSession>> {
-        let conn = self.conn.read().await;
+        let conn = self.conn.lock().await;
         let queries = Queries::new(&conn);
         queries.list_sessions(limit)
     }
     
     /// Update a session
     pub async fn update_session(&self, session: &DbSession) -> Result<()> {
-        let conn = self.conn.read().await;
+        let conn = self.conn.lock().await;
         let queries = Queries::new(&conn);
         queries.update_session(session)?;
         debug!("Updated session: {}", session.id);
@@ -111,16 +113,18 @@ impl DatabaseSessionManager {
     
     /// Delete a session
     pub async fn delete_session(&self, id: &str) -> Result<()> {
-        let conn = self.conn.read().await;
-        let queries = Queries::new(&conn);
-        queries.delete_session(id)?;
-        
+        {
+            let conn = self.conn.lock().await;
+            let queries = Queries::new(&conn);
+            queries.delete_session(id)?;
+        }
+
         // Clear current session if it was deleted
         let mut current = self.current_session_id.write().await;
         if current.as_ref() == Some(&id.to_string()) {
             *current = None;
         }
-        
+
         info!("Deleted session: {}", id);
         Ok(())
     }
@@ -149,7 +153,7 @@ impl DatabaseSessionManager {
         db_message.provider = message.metadata.get("provider").and_then(|v| v.as_str()).map(String::from);
         db_message.model = message.metadata.get("model").and_then(|v| v.as_str()).map(String::from);
         
-        let conn = self.conn.read().await;
+        let conn = self.conn.lock().await;
         let queries = Queries::new(&conn);
         queries.create_message(&db_message)?;
         
@@ -165,14 +169,14 @@ impl DatabaseSessionManager {
     
     /// Get messages for a session
     pub async fn get_messages(&self, session_id: &str) -> Result<Vec<DbMessage>> {
-        let conn = self.conn.read().await;
+        let conn = self.conn.lock().await;
         let queries = Queries::new(&conn);
         queries.list_messages_by_session(session_id)
     }
     
     /// Update a message
     pub async fn update_message(&self, message: &DbMessage) -> Result<()> {
-        let conn = self.conn.read().await;
+        let conn = self.conn.lock().await;
         let queries = Queries::new(&conn);
         queries.update_message(message)?;
         debug!("Updated message: {}", message.id);
@@ -181,7 +185,7 @@ impl DatabaseSessionManager {
     
     /// Mark a message as finished
     pub async fn finish_message(&self, message_id: &str) -> Result<()> {
-        let conn = self.conn.read().await;
+        let conn = self.conn.lock().await;
         let queries = Queries::new(&conn);
         
         if let Some(mut message) = queries.get_message(message_id)? {
@@ -197,7 +201,7 @@ impl DatabaseSessionManager {
     pub async fn save_file(&self, session_id: &str, path: String, content: String) -> Result<DbFile> {
         let file_id = Uuid::new_v4().to_string();
         
-        let conn = self.conn.read().await;
+        let conn = self.conn.lock().await;
         let queries = Queries::new(&conn);
         
         // Check if file already exists for this session
@@ -215,14 +219,14 @@ impl DatabaseSessionManager {
     
     /// Get files for a session
     pub async fn get_session_files(&self, session_id: &str) -> Result<Vec<DbFile>> {
-        let conn = self.conn.read().await;
+        let conn = self.conn.lock().await;
         let queries = Queries::new(&conn);
         queries.list_files_by_session(session_id)
     }
     
     /// Get a specific file by path and session
     pub async fn get_file(&self, session_id: &str, path: &str) -> Result<Option<DbFile>> {
-        let conn = self.conn.read().await;
+        let conn = self.conn.lock().await;
         let queries = Queries::new(&conn);
         queries.get_file_by_path_and_session(path, session_id)
     }
@@ -235,7 +239,7 @@ impl DatabaseSessionManager {
         completion_tokens: i64,
         cost: f64,
     ) -> Result<()> {
-        let conn = self.conn.read().await;
+        let conn = self.conn.lock().await;
         let queries = Queries::new(&conn);
         
         if let Some(mut session) = queries.get_session(session_id)? {
@@ -252,15 +256,8 @@ impl DatabaseSessionManager {
         Ok(())
     }
     
-    /// Begin a database transaction
-    pub async fn begin_transaction(&self) -> Result<rusqlite::Transaction> {
-        let conn = self.conn.write().await;
-        let tx = unsafe {
-            // This is safe because we hold the write lock
-            std::ptr::read(&*conn as *const Connection).transaction()?
-        };
-        Ok(tx)
-    }
+    // Note: Database transactions are handled internally by rusqlite.
+    // Use individual operations instead of explicit transactions.
 }
 
 #[cfg(test)]
@@ -331,7 +328,7 @@ mod tests {
         // Finish message
         manager.finish_message(&message.id).await.unwrap();
         
-        let conn = manager.conn.read().await;
+        let conn = manager.conn.lock().await;
         let queries = Queries::new(&conn);
         let updated = queries.get_message(&message.id).unwrap().unwrap();
         assert!(updated.finished_at.is_some());

@@ -150,13 +150,13 @@ impl MessageFormatter {
     /// Create a new message formatter
     pub fn new() -> Self {
         let theme_manager = ThemeManager::new();
-        let current_theme = theme_manager.current_theme();
-        
+        let current_theme = theme_manager.current_theme().clone();
+
         Self {
+            syntax_highlighter: SyntaxHighlighter::new(&current_theme),
+            markdown_renderer: MarkdownRenderer::new(&current_theme),
+            code_highlighter: CodeHighlighter::new(&current_theme),
             theme_manager,
-            syntax_highlighter: SyntaxHighlighter::new(current_theme),
-            markdown_renderer: MarkdownRenderer::new(current_theme),
-            code_highlighter: CodeHighlighter::new(current_theme),
             emoji_support: true,
             max_line_width: None,
         }
@@ -180,7 +180,7 @@ impl MessageFormatter {
     }
 
     /// Format message content
-    pub fn format_content(&self, content: &[ContentBlock], options: &FormatOptions) -> FormattedText {
+    pub fn format_content(&self, content: &[ContentBlock], options: &FormatOptions) -> FormattedText<'static> {
         let mut lines = Vec::new();
         let mut metadata = FormatMetadata::default();
         
@@ -206,7 +206,7 @@ impl MessageFormatter {
     }
 
     /// Format a single content block
-    pub fn format_content_block(&self, block: &ContentBlock, options: &FormatOptions) -> FormattedText {
+    pub fn format_content_block(&self, block: &ContentBlock, options: &FormatOptions) -> FormattedText<'static> {
         match block {
             ContentBlock::Text { text } => {
                 if options.render_markdown {
@@ -228,7 +228,7 @@ impl MessageFormatter {
     }
 
     /// Format plain text without markdown
-    fn format_plain_text(&self, text: &str, options: &FormatOptions) -> FormattedText {
+    fn format_plain_text(&self, text: &str, options: &FormatOptions) -> FormattedText<'static> {
         let theme = self.theme_manager.current_theme();
         let mut lines = Vec::new();
         
@@ -254,7 +254,7 @@ impl MessageFormatter {
     }
 
     /// Format image placeholder
-    fn format_image_placeholder(&self, _options: &FormatOptions) -> FormattedText {
+    fn format_image_placeholder(&self, _options: &FormatOptions) -> FormattedText<'static> {
         let theme = self.theme_manager.current_theme();
         
         let line = Line::from(vec![
@@ -277,33 +277,33 @@ impl MessageFormatter {
     }
 
     /// Format tool use block
-    fn format_tool_use(&self, id: &str, name: &str, input: &serde_json::Value, options: &FormatOptions) -> FormattedText {
+    fn format_tool_use(&self, id: &str, name: &str, input: &serde_json::Value, options: &FormatOptions) -> FormattedText<'static> {
         let theme = self.theme_manager.current_theme();
-        let mut lines = Vec::new();
-        
+        let mut lines: Vec<Line<'static>> = Vec::new();
+
         // Tool header
         lines.push(Line::from(vec![
-            Span::styled("🔧 ", theme.styles.chat_tool),
-            Span::styled("Tool: ", theme.styles.chat_tool),
-            Span::styled(name, theme.styles.chat_tool.add_modifier(Modifier::BOLD)),
+            Span::styled("🔧 ".to_string(), theme.styles.chat_tool_message),
+            Span::styled("Tool: ".to_string(), theme.styles.chat_tool_message),
+            Span::styled(name.to_string(), theme.styles.chat_tool_message.add_modifier(Modifier::BOLD)),
         ]));
-        
+
         // Tool ID (if not compact)
         if !options.compact_mode {
             lines.push(Line::from(vec![
                 Span::raw("   "),
-                Span::styled("ID: ", theme.styles.muted),
-                Span::styled(id, theme.styles.muted),
+                Span::styled("ID: ".to_string(), theme.styles.muted),
+                Span::styled(id.to_string(), theme.styles.muted),
             ]));
         }
-        
+
         // Format input
         if let Ok(formatted_input) = serde_json::to_string_pretty(input) {
             lines.push(Line::from(vec![
                 Span::raw("   "),
-                Span::styled("Input:", theme.styles.muted),
+                Span::styled("Input:".to_string(), theme.styles.muted),
             ]));
-            
+
             let code_lines = self.code_highlighter.highlight("json", &formatted_input);
             for code_line in code_lines {
                 let mut indented_spans = vec![Span::raw("     ")]; // Extra indentation
@@ -311,43 +311,44 @@ impl MessageFormatter {
                 lines.push(Line::from(indented_spans));
             }
         }
-        
+
         let width = lines.iter().map(|l| l.width()).max().unwrap_or(0);
+        let height = lines.len();
         let metadata = FormatMetadata {
             character_count: name.len() + id.len(),
             word_count: 2,
-            line_count: lines.len(),
+            line_count: height,
             ..Default::default()
         };
-        
+
         FormattedText {
             lines,
             width,
-            height: lines.len(),
+            height,
             metadata,
         }
     }
 
     /// Format tool result block
-    fn format_tool_result(&self, tool_call_id: &str, content: &str, options: &FormatOptions) -> FormattedText {
+    fn format_tool_result(&self, tool_call_id: &str, content: &str, options: &FormatOptions) -> FormattedText<'static> {
         let theme = self.theme_manager.current_theme();
-        let mut lines = Vec::new();
-        
+        let mut lines: Vec<Line<'static>> = Vec::new();
+
         // Result header
         lines.push(Line::from(vec![
-            Span::styled("📋 ", theme.styles.success),
-            Span::styled("Tool Result:", theme.styles.success),
+            Span::styled("📋 ".to_string(), theme.styles.success),
+            Span::styled("Tool Result:".to_string(), theme.styles.success),
         ]));
-        
+
         // Tool call ID (if not compact)
         if !options.compact_mode {
             lines.push(Line::from(vec![
                 Span::raw("   "),
-                Span::styled("Call ID: ", theme.styles.muted),
-                Span::styled(tool_call_id, theme.styles.muted),
+                Span::styled("Call ID: ".to_string(), theme.styles.muted),
+                Span::styled(tool_call_id.to_string(), theme.styles.muted),
             ]));
         }
-        
+
         // Format content
         for line in content.lines() {
             lines.push(Line::from(vec![
@@ -355,14 +356,15 @@ impl MessageFormatter {
                 Span::styled(line.to_string(), theme.styles.text),
             ]));
         }
-        
+
         let width = lines.iter().map(|l| l.width()).max().unwrap_or(0);
+        let height = lines.len();
         let metadata = self.calculate_metadata(content);
-        
+
         FormattedText {
             lines,
             width,
-            height: lines.len(),
+            height,
             metadata,
         }
     }
@@ -429,10 +431,10 @@ impl MessageFormatter {
         
         if options.show_role_icons {
             let (icon, style) = match role {
-                MessageRole::User => (&theme.icons.user, theme.styles.chat_user),
-                MessageRole::Assistant => (&theme.icons.assistant, theme.styles.chat_assistant),
-                MessageRole::System => (&theme.icons.system, theme.styles.chat_system),
-                MessageRole::Tool => (&theme.icons.tool, theme.styles.chat_tool),
+                MessageRole::User => (&theme.icons.user, theme.styles.chat_user_message),
+                MessageRole::Assistant => (&theme.icons.assistant, theme.styles.chat_assistant_message),
+                MessageRole::System => (&theme.icons.system, theme.styles.chat_system_message),
+                MessageRole::Tool => (&theme.icons.tool, theme.styles.chat_tool_message),
             };
             
             spans.push(Span::styled(icon.clone(), style));
@@ -447,10 +449,10 @@ impl MessageFormatter {
         };
         
         let style = match role {
-            MessageRole::User => theme.styles.chat_user,
-            MessageRole::Assistant => theme.styles.chat_assistant,
-            MessageRole::System => theme.styles.chat_system,
-            MessageRole::Tool => theme.styles.chat_tool,
+            MessageRole::User => theme.styles.chat_user_message,
+            MessageRole::Assistant => theme.styles.chat_assistant_message,
+            MessageRole::System => theme.styles.chat_system_message,
+            MessageRole::Tool => theme.styles.chat_tool_message,
         };
         
         spans.push(Span::styled(role_text.to_string(), style));

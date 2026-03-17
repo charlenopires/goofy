@@ -41,11 +41,15 @@ impl BashTool {
     /// Check if command is potentially dangerous
     /// The shell module already has built-in command blocking, but we keep additional checks here
     fn is_dangerous_command(&self, command: &str) -> bool {
-        // Additional dangerous patterns not covered by shell's built-in blocker
+        // Dangerous patterns that require explicit permission
         let dangerous_patterns = [
+            "rm -rf", "rm -fr", // Recursive file deletion
+            "shutdown", "reboot", "halt", "poweroff", // System control
+            "mkfs", "fdisk", "dd if=", // Disk operations
             "curl", "wget", "nc", "netcat", // Network commands (can be restricted)
             "python -c", "perl -e", "ruby -e", // Inline script execution
-            "chmod 777 /", "chown root", // Permission changes
+            "chmod 777", "chown root", // Permission changes
+            "> /dev/sd", // Direct device writes
         ];
 
         dangerous_patterns.iter().any(|&pattern| command.contains(pattern))

@@ -35,7 +35,7 @@ pub enum ListOperation {
 }
 
 /// Individual list item with content and metadata
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ListItem {
     pub id: String,
     pub content: Vec<Line<'static>>,
@@ -99,13 +99,13 @@ pub struct ListAnimationConfig {
 impl Default for ListAnimationConfig {
     fn default() -> Self {
         Self {
-            add_animation: AnimationConfig::new(Duration::from_millis(300))
+            add_animation: AnimationConfig::new().duration(Duration::from_millis(300))
                 .with_easing(EasingType::EaseOutBack),
-            remove_animation: AnimationConfig::new(Duration::from_millis(250))
+            remove_animation: AnimationConfig::new().duration(Duration::from_millis(250))
                 .with_easing(EasingType::EaseInBack),
-            move_animation: AnimationConfig::new(Duration::from_millis(400))
+            move_animation: AnimationConfig::new().duration(Duration::from_millis(400))
                 .with_easing(EasingType::EaseInOutCubic),
-            update_animation: AnimationConfig::new(Duration::from_millis(200))
+            update_animation: AnimationConfig::new().duration(Duration::from_millis(200))
                 .with_easing(EasingType::EaseInOut),
             stagger_delay: Duration::from_millis(50),
             parallel_animations: false,
@@ -149,9 +149,9 @@ impl ListAnimationConfig {
     /// Quick presets for common list animation styles
     pub fn smooth_ios() -> Self {
         Self {
-            add_animation: AnimationConfig::new(Duration::from_millis(300))
+            add_animation: AnimationConfig::new().duration(Duration::from_millis(300))
                 .with_easing(EasingType::EaseOutCubic),
-            remove_animation: AnimationConfig::new(Duration::from_millis(250))
+            remove_animation: AnimationConfig::new().duration(Duration::from_millis(250))
                 .with_easing(EasingType::EaseInCubic),
             stagger_delay: Duration::from_millis(30),
             bounce_on_add: false,
@@ -163,9 +163,9 @@ impl ListAnimationConfig {
 
     pub fn material_design() -> Self {
         Self {
-            add_animation: AnimationConfig::new(Duration::from_millis(225))
+            add_animation: AnimationConfig::new().duration(Duration::from_millis(225))
                 .with_easing(EasingType::EaseOutQuart),
-            remove_animation: AnimationConfig::new(Duration::from_millis(195))
+            remove_animation: AnimationConfig::new().duration(Duration::from_millis(195))
                 .with_easing(EasingType::EaseInQuart),
             stagger_delay: Duration::from_millis(25),
             bounce_on_add: false,
@@ -176,9 +176,9 @@ impl ListAnimationConfig {
 
     pub fn playful_bounce() -> Self {
         Self {
-            add_animation: AnimationConfig::new(Duration::from_millis(500))
+            add_animation: AnimationConfig::new().duration(Duration::from_millis(500))
                 .with_easing(EasingType::EaseOutBounce),
-            remove_animation: AnimationConfig::new(Duration::from_millis(400))
+            remove_animation: AnimationConfig::new().duration(Duration::from_millis(400))
                 .with_easing(EasingType::EaseInBack),
             stagger_delay: Duration::from_millis(80),
             bounce_on_add: true,
@@ -249,8 +249,12 @@ impl AnimatedList {
 
     /// Add an item to the list
     pub fn add_item(&mut self, item: ListItem) {
+        // Count existing items plus pending adds to get the correct append index
+        let pending_add_count = self.pending_operations.iter()
+            .filter(|op| matches!(op, ListOperation::Add { .. }))
+            .count();
         self.pending_operations.push(ListOperation::Add {
-            index: self.items.len(),
+            index: self.items.len() + pending_add_count,
             item,
         });
     }
@@ -379,7 +383,7 @@ impl AnimatedList {
         if self.config.bounce_on_add {
             let slide_config = SlideConfig::new(self.config.slide_direction)
                 .with_duration(self.config.add_animation.duration)
-                .with_easing(self.config.add_animation.easing);
+                .with_easing(self.config.add_animation.easing.into());
             
             animated_item.animation = Some(Box::new(SlideAnimation::new(slide_config, animated_item.target_rect)));
             animated_item.is_animating = true;
@@ -495,9 +499,8 @@ impl AnimatedList {
 
         for (index, item) in self.items.iter_mut().enumerate() {
             if let Some(animation) = &mut item.animation {
-                if animation.update()? {
-                    any_updated = true;
-                }
+                animation.update()?;
+                any_updated = true;
 
                 if animation.is_complete() {
                     item.is_animating = false;
@@ -568,7 +571,7 @@ impl Animation for AnimatedList {
     }
 
     fn is_complete(&self) -> bool {
-        matches!(self.state, AnimationState::Complete) &&
+        matches!(self.state, AnimationState::Complete | AnimationState::Idle) &&
         self.items.iter().all(|item| !item.is_animating)
     }
 

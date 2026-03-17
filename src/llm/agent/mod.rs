@@ -9,6 +9,7 @@ use tokio::sync::{mpsc, RwLock, Mutex};
 use std::collections::HashMap;
 use uuid::Uuid;
 use tracing::{info, debug, error, warn};
+use futures::StreamExt;
 
 use crate::llm::{
     LlmProvider, Message, MessageRole, ContentBlock, 
@@ -105,7 +106,7 @@ impl AgentService {
                 context_paths,
                 prompt_id,
                 event_tx.clone(),
-                &mut cancel_rx,
+                cancel_rx,
             ).await;
             
             if let Err(e) = result {
@@ -136,7 +137,7 @@ impl AgentService {
         context_paths: Vec<std::path::PathBuf>,
         prompt_id: PromptId,
         event_tx: mpsc::UnboundedSender<AgentEvent>,
-        cancel_rx: &mut mpsc::Receiver<()>,
+        mut cancel_rx: mpsc::Receiver<()>,
     ) -> Result<()> {
         // Get or create session
         let session = if let Some(session) = db_manager.get_session(&session_id).await? {
@@ -184,24 +185,26 @@ impl AgentService {
             messages: conversation,
             temperature: Some(0.7),
             max_tokens: None,
-            tools: Some(tool_manager.get_tool_definitions()),
+            tools: tool_manager.get_tool_definitions(),
             tool_choice: None,
             stop: None,
             stream: true,
+            system_message: None,
+            top_p: None,
+            metadata: HashMap::new(),
         };
         
         let mut stream = provider.chat_completion_stream(request).await?;
         let mut response_content = String::new();
-        let mut response_message = Message::new_text(MessageRole::Assistant, String::new());
-        
+
         // Process stream
-        while let Some(event) = stream.recv().await {
+        while let Some(event) = stream.next().await {
             // Check for cancellation
             if cancel_rx.try_recv().is_ok() {
                 info!("Request cancelled for session {}", session_id);
                 break;
             }
-            
+
             match event {
                 Ok(provider_event) => {
                     match provider_event {
@@ -226,20 +229,21 @@ impl AgentService {
                                 progress: None,
                                 done: false,
                             });
-                            
+
                             // Execute tool
                             // TODO: Implement tool execution
                         }
-                        crate::llm::ProviderEvent::ContentStop | 
+                        crate::llm::ProviderEvent::ContentStop |
                         crate::llm::ProviderEvent::Done { .. } => {
-                            // Save assistant response
-                            response_message.content = vec![ContentBlock::Text { 
-                                text: response_content.clone() 
-                            }];
-                            
-                            let db_msg = db_manager.add_message(&session.id, response_message).await?;
+                            // Save assistant response as a new message
+                            let final_message = Message::new_text(
+                                MessageRole::Assistant,
+                                response_content.clone(),
+                            );
+
+                            let db_msg = db_manager.add_message(&session.id, final_message).await?;
                             db_manager.finish_message(&db_msg.id).await?;
-                            
+
                             // Send completion event
                             let _ = event_tx.send(AgentEvent {
                                 event_type: AgentEventType::Response,
@@ -255,7 +259,7 @@ impl AgentService {
                 }
                 Err(e) => {
                     error!("Stream error: {}", e);
-                    return Err(e.into());
+                    return Err(anyhow::anyhow!("{}", e));
                 }
             }
         }
@@ -310,14 +314,17 @@ impl AgentService {
             ],
             temperature: Some(0.3),
             max_tokens: Some(800),
-            tools: None,
+            tools: vec![],
             tool_choice: None,
             stop: None,
             stream: false,
+            system_message: None,
+            top_p: None,
+            metadata: HashMap::new(),
         };
-        
+
         let response = self.provider.chat_completion(request).await?;
-        
+
         // Update session with summary
         if let Some(mut session) = self.db_manager.get_session(session_id).await? {
             // Store summary as a special message
@@ -357,10 +364,13 @@ impl AgentService {
             ],
             temperature: Some(0.5),
             max_tokens: Some(20),
-            tools: None,
+            tools: vec![],
             tool_choice: None,
             stop: None,
             stream: false,
+            system_message: None,
+            top_p: None,
+            metadata: HashMap::new(),
         };
         
         let response = self.provider.chat_completion(request).await?;

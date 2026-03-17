@@ -40,11 +40,15 @@ impl App {
     pub async fn new(config: Config) -> Result<Self> {
         debug!("Creating new App instance");
         
-        // Initialize session manager (legacy)
-        let session_manager = Arc::new(SessionManager::new(&config.data_dir).await?);
-        
-        // Initialize new session service
+        // Initialize new session service (creates DB with correct schema via migrations)
         let session_service = SessionServiceFactory::create(&config.data_dir).await?;
+
+        // Initialize legacy session manager using a separate DB file to avoid schema conflicts
+        let legacy_db_dir = config.data_dir.join("legacy");
+        if !legacy_db_dir.exists() {
+            let _ = std::fs::create_dir_all(&legacy_db_dir);
+        }
+        let session_manager = Arc::new(SessionManager::new(&legacy_db_dir).await?);
         
         // Initialize conversation manager
         let conversation_manager = Arc::new(ConversationManager::new());
@@ -151,20 +155,23 @@ impl App {
                     Some(session_event) = session_events.recv() => {
                         // Convert session event to app event
                         let app_event = match session_event.event_type {
-                            crate::session::EventType::Created => {
-                                AppEvent::SessionCreated { 
-                                    session_id: session_event.payload.id 
+                            crate::pubsub::EventType::Created => {
+                                AppEvent::SessionCreated {
+                                    session_id: session_event.payload.id
                                 }
                             }
-                            crate::session::EventType::Updated => {
-                                AppEvent::SessionUpdated { 
-                                    session_id: session_event.payload.id 
+                            crate::pubsub::EventType::Updated => {
+                                AppEvent::SessionUpdated {
+                                    session_id: session_event.payload.id
                                 }
                             }
-                            crate::session::EventType::Deleted => {
-                                AppEvent::SessionDeleted { 
-                                    session_id: session_event.payload.id 
+                            crate::pubsub::EventType::Deleted => {
+                                AppEvent::SessionDeleted {
+                                    session_id: session_event.payload.id
                                 }
+                            }
+                            _ => {
+                                continue;
                             }
                         };
                         
@@ -249,55 +256,32 @@ impl App {
     /// Run a single prompt non-interactively
     pub async fn run_non_interactive(&mut self, prompt: &str, quiet: bool) -> Result<String> {
         info!("Running non-interactive prompt");
-        debug!("Prompt: {}", prompt);
-        debug!("Quiet mode: {}", quiet);
-        
+
         if !quiet {
-            println!("Processing prompt...");
+            eprintln!("Processing...");
         }
-        
-        // Create a new session using the session service
-        let title = if prompt.len() > 100 {
-            format!("{}...", &prompt[..100])
-        } else {
-            prompt.to_string()
+
+        // Use the Agent directly with the LLM provider
+        let messages = vec![
+            crate::llm::Message::new_user(prompt.to_string()),
+        ];
+
+        let request = crate::llm::ChatRequest {
+            messages,
+            tools: self.tool_manager.get_tool_definitions(),
+            system_message: self.config.system_message.clone(),
+            max_tokens: self.config.max_tokens,
+            temperature: self.config.temperature,
+            top_p: self.config.top_p,
+            stream: false,
+            metadata: std::collections::HashMap::new(),
+            tool_choice: None,
+            stop: None,
         };
-        
-        let session = self.session_service.create(title).await?;
-        
-        // Start conversation
-        let conversation = self.conversation_manager.start_conversation(
-            session.id.clone(),
-            self.llm_provider.clone(),
-        ).await?;
-        
-        // Send the prompt and get response
-        let response = conversation.send_message(prompt.to_string()).await?;
-        
-        // Update session with token usage
-        if let Some(usage) = response.metadata.get("usage") {
-            // Update session with completion details
-            let mut updated_session = session.clone();
-            updated_session.message_count += 2; // User message + assistant response
-            
-            // Parse usage if it's a JSON value
-            if let Ok(usage_obj) = serde_json::from_value::<serde_json::Map<String, serde_json::Value>>(usage.clone()) {
-                if let Some(prompt_tokens) = usage_obj.get("prompt_tokens").and_then(|v| v.as_i64()) {
-                    updated_session.prompt_tokens = prompt_tokens;
-                }
-                if let Some(completion_tokens) = usage_obj.get("completion_tokens").and_then(|v| v.as_i64()) {
-                    updated_session.completion_tokens = completion_tokens;
-                }
-            }
-            
-            // Save the updated session
-            let _ = self.session_service.save(updated_session).await;
-        }
-        
-        if !quiet {
-            println!("Response received.");
-        }
-        
+
+        let response = self.llm_provider.chat_completion(request).await
+            .map_err(|e| anyhow::anyhow!("{}", e))?;
+
         Ok(response.content)
     }
     

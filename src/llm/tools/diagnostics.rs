@@ -1,6 +1,6 @@
 //! Diagnostics tool implementation for getting LSP diagnostics
 
-use super::{BaseTool, ToolRequest, ToolResponse, ToolResult};
+use super::{BaseTool, ToolPermissions, ToolRequest, ToolResponse, ToolResult};
 use async_trait::async_trait;
 use serde_json::json;
 use std::collections::HashMap;
@@ -318,11 +318,10 @@ mod tests {
     #[tokio::test]
     async fn test_diagnostics_tool_info() {
         let tool = DiagnosticsTool::new(None);
-        let info = tool.info();
-        
-        assert_eq!(info.name, "diagnostics");
-        assert!(info.description.contains("diagnostics"));
-        assert!(info.description.contains("errors"));
+
+        assert_eq!(tool.name(), "diagnostics");
+        assert!(tool.description().contains("diagnostics"));
+        assert!(tool.description().contains("errors"));
     }
 
     #[tokio::test]
@@ -371,7 +370,10 @@ mod tests {
     async fn test_no_lsp_manager() {
         let tool = DiagnosticsTool::new(None);
         let request = ToolRequest {
-            parameters: serde_json::json!({}),
+            tool_name: "diagnostics".to_string(),
+            parameters: HashMap::new(),
+            working_directory: None,
+            permissions: ToolPermissions::default(),
         };
 
         let response = tool.execute(request).await.unwrap();

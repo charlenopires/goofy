@@ -293,14 +293,14 @@ pub fn classic_dark_highlight_theme() -> HighlightTheme {
             variable: Color::White,
             variable_builtin: Color::Red,
             constant: Color::Yellow,
-            parameter: Color::LightGray,
+            parameter: Color::Gray,
             
             type_name: Color::Blue,
             type_builtin: Color::Cyan,
             type_parameter: Color::Magenta,
             
             operator: Color::Magenta,
-            punctuation: Color::LightGray,
+            punctuation: Color::Gray,
             delimiter: Color::Gray,
             
             error: Color::Red,
@@ -317,7 +317,7 @@ pub fn classic_dark_highlight_theme() -> HighlightTheme {
             
             markup_heading: Color::Cyan,
             markup_bold: Color::White,
-            markup_italic: Color::LightGray,
+            markup_italic: Color::Gray,
             markup_link: Color::Blue,
             markup_code: Color::Red,
         },
@@ -394,7 +394,7 @@ pub fn high_contrast_highlight_theme() -> HighlightTheme {
             background: Color::Black,
             text: Color::White,
             
-            line_number: Color::LightGray,
+            line_number: Color::Gray,
             line_number_active: Color::White,
             
             comment: Color::Gray,
@@ -423,7 +423,7 @@ pub fn high_contrast_highlight_theme() -> HighlightTheme {
             
             operator: Color::LightMagenta,
             punctuation: Color::White,
-            delimiter: Color::LightGray,
+            delimiter: Color::Gray,
             
             error: Color::LightRed,
             warning: Color::LightYellow,
@@ -439,7 +439,7 @@ pub fn high_contrast_highlight_theme() -> HighlightTheme {
             
             markup_heading: Color::LightCyan,
             markup_bold: Color::White,
-            markup_italic: Color::LightGray,
+            markup_italic: Color::Gray,
             markup_link: Color::LightBlue,
             markup_code: Color::LightRed,
         },
@@ -462,47 +462,47 @@ pub fn monochrome_highlight_theme() -> HighlightTheme {
             comment_doc: Color::Gray,
             
             keyword: Color::White,
-            keyword_control: Color::LightGray,
+            keyword_control: Color::Gray,
             keyword_type: Color::Gray,
             
-            string: Color::LightGray,
+            string: Color::Gray,
             string_escape: Color::Gray,
             number: Color::Gray,
-            boolean: Color::LightGray,
+            boolean: Color::Gray,
             null: Color::DarkGray,
             
             function: Color::White,
-            function_builtin: Color::LightGray,
+            function_builtin: Color::Gray,
             variable: Color::White,
             variable_builtin: Color::Gray,
             constant: Color::Gray,
-            parameter: Color::LightGray,
+            parameter: Color::Gray,
             
             type_name: Color::White,
             type_builtin: Color::Gray,
-            type_parameter: Color::LightGray,
+            type_parameter: Color::Gray,
             
-            operator: Color::LightGray,
+            operator: Color::Gray,
             punctuation: Color::Gray,
             delimiter: Color::DarkGray,
             
-            error: Color::LightGray,
+            error: Color::Gray,
             warning: Color::Gray,
             
             tag: Color::White,
-            attribute: Color::LightGray,
+            attribute: Color::Gray,
             property: Color::Gray,
             label: Color::Gray,
             
             diff_added: Color::White,
-            diff_removed: Color::LightGray,
+            diff_removed: Color::Gray,
             diff_changed: Color::Gray,
             
             markup_heading: Color::White,
             markup_bold: Color::White,
-            markup_italic: Color::LightGray,
+            markup_italic: Color::Gray,
             markup_link: Color::Gray,
-            markup_code: Color::LightGray,
+            markup_code: Color::Gray,
         },
     }
 }

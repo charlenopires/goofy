@@ -85,7 +85,7 @@ impl LlmProvider for GeminiProvider {
             contents: self.convert_messages(&request.messages),
             generation_config: Some(GenerationConfig {
                 temperature: request.temperature,
-                max_output_tokens: request.max_tokens,
+                max_output_tokens: request.max_tokens.map(|v| v as i32),
                 stop_sequences: request.stop,
                 ..Default::default()
             }),
@@ -97,15 +97,15 @@ impl LlmProvider for GeminiProvider {
             .json(&gemini_request)
             .send()
             .await
-            .context("Failed to send request to Gemini")?;
-        
+            .map_err(|e| LlmError::ApiError(format!("Failed to send request to Gemini: {}", e)))?;
+
         if response.status() != StatusCode::OK {
             let error_text = response.text().await.unwrap_or_default();
             return Err(LlmError::ApiError(format!("Gemini API error: {}", error_text)));
         }
-        
+
         let gemini_response: GeminiResponse = response.json().await
-            .context("Failed to parse Gemini response")?;
+            .map_err(|e| LlmError::ApiError(format!("Failed to parse Gemini response: {}", e)))?;
         
         // Extract content from response
         let content = gemini_response.candidates
@@ -148,7 +148,7 @@ impl LlmProvider for GeminiProvider {
             contents: self.convert_messages(&request.messages),
             generation_config: Some(GenerationConfig {
                 temperature: request.temperature,
-                max_output_tokens: request.max_tokens,
+                max_output_tokens: request.max_tokens.map(|v| v as i32),
                 stop_sequences: request.stop,
                 ..Default::default()
             }),
@@ -160,7 +160,7 @@ impl LlmProvider for GeminiProvider {
             .json(&gemini_request)
             .send()
             .await
-            .context("Failed to send streaming request to Gemini")?;
+            .map_err(|e| LlmError::ApiError(format!("Failed to send streaming request to Gemini: {}", e)))?;
         
         if response.status() != StatusCode::OK {
             let error_text = response.text().await.unwrap_or_default();

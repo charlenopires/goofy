@@ -73,13 +73,13 @@ impl MessageRenderer {
     /// Create a new message renderer
     pub fn new() -> Self {
         let theme_manager = ThemeManager::new();
-        let current_theme = theme_manager.current_theme();
-        
+        let current_theme = theme_manager.current_theme().clone();
+
         Self {
+            markdown_parser: MarkdownParser::new(&current_theme),
+            syntax_highlighter: SyntaxHighlighter::new(&current_theme),
             theme_manager,
             display_options: MessageDisplayOptions::default(),
-            markdown_parser: MarkdownParser::new(current_theme),
-            syntax_highlighter: SyntaxHighlighter::new(current_theme),
             animation_state: AnimationState::new(),
         }
     }
@@ -214,10 +214,10 @@ impl MessageRenderer {
         let theme = self.theme_manager.current_theme();
         
         let role_style = match message.role {
-            MessageRole::User => theme.styles.chat_user,
-            MessageRole::Assistant => theme.styles.chat_assistant,
-            MessageRole::System => theme.styles.chat_system,
-            MessageRole::Tool => theme.styles.chat_tool,
+            MessageRole::User => theme.styles.chat_user_message,
+            MessageRole::Assistant => theme.styles.chat_assistant_message,
+            MessageRole::System => theme.styles.chat_system_message,
+            MessageRole::Tool => theme.styles.chat_tool_message,
         };
 
         let role_icon = match message.role {
@@ -284,12 +284,13 @@ impl MessageRenderer {
                 )));
             }
 
+            let num_lines = lines.len() as u16;
             let thinking_widget = Paragraph::new(Text::from(lines))
                 .block(Block::default().borders(Borders::LEFT).border_style(theme.styles.info))
                 .wrap(Wrap { trim: true });
 
             frame.render_widget(thinking_widget, area);
-            lines.len() as u16
+            num_lines
         } else {
             0
         }
@@ -317,8 +318,8 @@ impl MessageRenderer {
                 }
                 ContentBlock::ToolUse { name, input, .. } => {
                     lines.push(Line::from(vec![
-                        Span::styled("🔧 ", theme.styles.chat_tool),
-                        Span::styled(format!("Using tool: {}", name), theme.styles.chat_tool),
+                        Span::styled("🔧 ", theme.styles.chat_tool_message),
+                        Span::styled(format!("Using tool: {}", name), theme.styles.chat_tool_message),
                     ]));
                     if let Ok(formatted_input) = serde_json::to_string_pretty(input) {
                         lines.extend(self.syntax_highlighter.highlight_json(&formatted_input));
@@ -334,18 +335,7 @@ impl MessageRenderer {
             }
         }
 
-        let content_widget = Paragraph::new(Text::from(lines))
-            .style(theme.styles.text)
-            .wrap(if self.display_options.word_wrap {
-                Wrap { trim: true }
-            } else {
-                Wrap { trim: false }
-            });
-
-        frame.render_widget(content_widget, area);
-        
-        // Calculate actual height used
-        let total_lines = lines.len() as u16;
+        // Calculate actual height used before moving lines
         let available_width = area.width as usize;
         let wrapped_lines = lines.iter()
             .map(|line| {
@@ -357,7 +347,17 @@ impl MessageRenderer {
                 }
             })
             .sum::<usize>() as u16;
-        
+
+        let content_widget = Paragraph::new(Text::from(lines))
+            .style(theme.styles.text)
+            .wrap(if self.display_options.word_wrap {
+                Wrap { trim: true }
+            } else {
+                Wrap { trim: false }
+            });
+
+        frame.render_widget(content_widget, area);
+
         wrapped_lines.min(area.height)
     }
 
@@ -442,7 +442,7 @@ impl MessageRenderer {
             lines.push(Line::from(vec![
                 Span::styled(status_icon, status_style),
                 Span::raw(" "),
-                Span::styled(format!("Tool: {}", tool_call.name), theme.styles.chat_tool),
+                Span::styled(format!("Tool: {}", tool_call.name), theme.styles.chat_tool_message),
             ]));
             total_height += 1;
 
@@ -498,7 +498,7 @@ impl MessageRenderer {
         }
 
         let tool_calls_widget = Paragraph::new(Text::from(lines))
-            .block(Block::default().borders(Borders::LEFT).border_style(theme.styles.chat_tool))
+            .block(Block::default().borders(Borders::LEFT).border_style(theme.styles.chat_tool_message))
             .wrap(Wrap { trim: true });
 
         frame.render_widget(tool_calls_widget, area);

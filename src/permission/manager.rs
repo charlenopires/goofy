@@ -79,11 +79,11 @@ impl PermissionManager {
 
         if granted {
             info!("Permission granted after prompt for tool '{}': {}", context.tool_name, message);
+            Ok(granted)
         } else {
             warn!("Permission denied after prompt for tool '{}': {}", context.tool_name, message);
+            Err(anyhow::anyhow!("Permission denied: {}", message))
         }
-
-        Ok(granted)
     }
 
     /// Auto-decide permission based on risk assessment

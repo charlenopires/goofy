@@ -3,15 +3,15 @@
 //! This module provides sophisticated navigation features like global search,
 //! pagination controls, bookmarking, and history tracking for list components.
 
-use super::{ListItem, ListEvent};
+use super::ListItem;
 use anyhow::Result;
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
-    layout::Rect,
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
     text::{Line, Span},
 };
 use std::collections::{HashMap, VecDeque};
+use std::marker::PhantomData;
 use std::time::{Duration, Instant};
 
 /// Navigation state and capabilities for lists
@@ -19,30 +19,33 @@ use std::time::{Duration, Instant};
 pub struct ListNavigator<T: ListItem> {
     /// Current page number (0-based)
     current_page: usize,
-    
+
     /// Items per page
     page_size: usize,
-    
+
     /// Total number of items
     total_items: usize,
-    
+
     /// Navigation history
     history: VecDeque<NavigationEntry>,
-    
+
     /// Current position in history
     history_position: usize,
-    
+
     /// Bookmarks by name
     bookmarks: HashMap<String, Bookmark>,
-    
+
     /// Search state
     search_state: SearchState,
-    
+
     /// Quick jump state
     jump_state: JumpState,
-    
+
     /// Navigation configuration
     config: NavigationConfig,
+
+    /// Phantom data for type parameter T
+    _phantom: PhantomData<T>,
 }
 
 /// Navigation history entry
@@ -167,9 +170,10 @@ impl<T: ListItem> ListNavigator<T> {
                 is_active: false,
             },
             config,
+            _phantom: PhantomData,
         }
     }
-    
+
     /// Set the total number of items
     pub fn set_total_items(&mut self, total: usize) {
         self.total_items = total;
@@ -304,13 +308,14 @@ impl<T: ListItem> ListNavigator<T> {
     /// Go to a bookmark
     pub fn goto_bookmark(&mut self, name: &str) -> Result<bool> {
         if let Some(bookmark) = self.bookmarks.get(name) {
+            let bookmark_page = bookmark.page;
             self.add_history_entry(
                 self.current_page,
                 None,
                 0,
                 format!("Navigated to bookmark '{}'", name),
             );
-            self.current_page = bookmark.page.min(self.max_page());
+            self.current_page = bookmark_page.min(self.max_page());
             Ok(true)
         } else {
             Ok(false)
@@ -606,27 +611,27 @@ impl<T: ListItem> ListNavigator<T> {
         
         for (name, bookmark) in &self.bookmarks {
             let mut spans = Vec::new();
-            
+
             spans.push(Span::styled(
-                name,
+                name.clone(),
                 Style::default()
                     .fg(theme.colors.primary)
                     .add_modifier(Modifier::BOLD),
             ));
-            
+
             spans.push(Span::styled(
                 format!(" (page {})", bookmark.page + 1),
                 Style::default().fg(theme.colors.text),
             ));
-            
+
             if let Some(description) = &bookmark.description {
                 spans.push(Span::raw(" - "));
                 spans.push(Span::styled(
-                    description,
+                    description.clone(),
                     Style::default().fg(theme.colors.muted),
                 ));
             }
-            
+
             lines.push(Line::from(spans));
         }
         
@@ -668,23 +673,23 @@ mod tests {
     
     #[test]
     fn test_pagination() {
-        let mut navigator = ListNavigator::new();
-        navigator.set_total_items(100).unwrap();
-        
+        let mut navigator: ListNavigator<SimpleListItem> = ListNavigator::new();
+        navigator.set_total_items(100);
+
         assert_eq!(navigator.total_pages(), 2); // 50 items per page by default
         assert_eq!(navigator.current_page(), 0);
-        
+
         navigator.next_page().unwrap();
         assert_eq!(navigator.current_page(), 1);
-        
+
         navigator.previous_page().unwrap();
         assert_eq!(navigator.current_page(), 0);
     }
-    
+
     #[test]
     fn test_bookmarks() {
-        let mut navigator = ListNavigator::new();
-        navigator.set_total_items(100).unwrap();
+        let mut navigator: ListNavigator<SimpleListItem> = ListNavigator::new();
+        navigator.set_total_items(100);
         navigator.goto_page(1).unwrap();
         
         navigator.add_bookmark("test".to_string(), Some("Test bookmark".to_string())).unwrap();
@@ -699,8 +704,8 @@ mod tests {
     
     #[test]
     fn test_page_range() {
-        let mut navigator = ListNavigator::new();
-        navigator.set_total_items(75).unwrap(); // 75 items, 50 per page = 2 pages
+        let mut navigator: ListNavigator<SimpleListItem> = ListNavigator::new();
+        navigator.set_total_items(75); // 75 items, 50 per page = 2 pages
         
         let range = navigator.current_page_range();
         assert_eq!(range, 0..50);
@@ -712,9 +717,9 @@ mod tests {
     
     #[test]
     fn test_quick_jump() {
-        let mut navigator = ListNavigator::new();
-        navigator.set_total_items(100).unwrap();
-        
+        let mut navigator: ListNavigator<SimpleListItem> = ListNavigator::new();
+        navigator.set_total_items(100);
+
         navigator.start_quick_jump(JumpMode::Page);
         navigator.quick_jump_input('2');
         navigator.execute_quick_jump().unwrap();

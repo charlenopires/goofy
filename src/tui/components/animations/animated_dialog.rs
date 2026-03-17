@@ -420,34 +420,34 @@ impl AnimatedDialog {
             DialogAnimationStyle::Fade => {
                 let fade_config = FadeConfig::new()
                     .direction(FadeDirection::In)
-                    .animation(AnimationConfig::new(self.config.entrance_duration)
+                    .animation(AnimationConfig::new().duration(self.config.entrance_duration)
                         .with_easing(EasingType::EaseOut));
                 Box::new(FadeAnimation::new(fade_config))
             }
             DialogAnimationStyle::Scale => {
                 let fade_config = FadeConfig::new()
                     .direction(FadeDirection::In)
-                    .animation(AnimationConfig::new(self.config.entrance_duration)
+                    .animation(AnimationConfig::new().duration(self.config.entrance_duration)
                         .with_easing(EasingType::EaseOutBack));
                 Box::new(FadeAnimation::new(fade_config))
             }
             DialogAnimationStyle::Slide => {
                 let slide_config = SlideConfig::new(self.config.slide_direction)
                     .with_duration(self.config.entrance_duration)
-                    .with_easing(EasingType::EaseOutQuad);
+                    .with_easing(EasingType::EaseOutQuad.into());
                 Box::new(SlideAnimation::new(slide_config, self.content_area))
             }
             DialogAnimationStyle::Bounce => {
                 let fade_config = FadeConfig::new()
                     .direction(FadeDirection::In)
-                    .animation(AnimationConfig::new(self.config.entrance_duration)
+                    .animation(AnimationConfig::new().duration(self.config.entrance_duration)
                         .with_easing(EasingType::EaseOutBounce));
                 Box::new(FadeAnimation::new(fade_config))
             }
             DialogAnimationStyle::Elastic => {
                 let fade_config = FadeConfig::new()
                     .direction(FadeDirection::In)
-                    .animation(AnimationConfig::new(self.config.entrance_duration)
+                    .animation(AnimationConfig::new().duration(self.config.entrance_duration)
                         .with_easing(EasingType::EaseOutElastic));
                 Box::new(FadeAnimation::new(fade_config))
             }
@@ -470,21 +470,21 @@ impl AnimatedDialog {
             DialogAnimationStyle::Fade => {
                 let fade_config = FadeConfig::new()
                     .direction(FadeDirection::Out)
-                    .animation(AnimationConfig::new(self.config.exit_duration)
+                    .animation(AnimationConfig::new().duration(self.config.exit_duration)
                         .with_easing(EasingType::EaseIn));
                 Box::new(FadeAnimation::new(fade_config))
             }
             DialogAnimationStyle::Scale => {
                 let fade_config = FadeConfig::new()
                     .direction(FadeDirection::Out)
-                    .animation(AnimationConfig::new(self.config.exit_duration)
+                    .animation(AnimationConfig::new().duration(self.config.exit_duration)
                         .with_easing(EasingType::EaseInBack));
                 Box::new(FadeAnimation::new(fade_config))
             }
             DialogAnimationStyle::Slide => {
                 let slide_config = SlideConfig::new(self.config.slide_direction.reverse())
                     .with_duration(self.config.exit_duration)
-                    .with_easing(EasingType::EaseInQuad);
+                    .with_easing(EasingType::EaseInQuad.into());
                 Box::new(SlideAnimation::new(slide_config, self.content_area))
             }
             _ => {
@@ -639,7 +639,7 @@ impl Animation for AnimatedDialog {
                 let backdrop_char = if backdrop.opacity() > 0.3 { "░" } else { " " };
                 let backdrop_line = backdrop_char.repeat(self.area.width as usize);
                 for _ in 0..self.area.height {
-                    lines.push(Line::from(Span::styled(&backdrop_line, 
+                    lines.push(Line::from(Span::styled(backdrop_line.clone(),
                         Style::default().fg(Color::DarkGray))));
                 }
             }

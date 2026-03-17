@@ -4,49 +4,63 @@
 //! single selection, multi-selection, range selection, and custom selection
 //! modes with keyboard and mouse support.
 
-use super::{ListItem, ListEvent};
+use super::ListItem;
 use anyhow::Result;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseEvent, MouseEventKind};
 use ratatui::{
-    layout::Rect,
     style::{Color, Modifier, Style},
-    text::{Line, Span},
+    text::Span,
 };
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap};
 use std::time::Instant;
 
 /// Selection manager for list components
-#[derive(Debug)]
 pub struct SelectionManager<T: ListItem> {
     /// Current selection mode
     mode: SelectionMode,
-    
+
     /// Currently selected items
     selected_items: BTreeSet<String>,
-    
+
     /// Primary selected item (for keyboard navigation)
     primary_selection: Option<String>,
-    
+
     /// Last selected item (for range selection)
     last_selected: Option<String>,
-    
+
     /// Anchor item for range selection
     range_anchor: Option<String>,
-    
+
     /// Selection history for undo/redo
     selection_history: Vec<SelectionSnapshot>,
-    
+
     /// Current position in history
     history_position: usize,
-    
+
     /// Selection configuration
     config: SelectionConfig,
-    
+
     /// Selection metadata
     metadata: HashMap<String, SelectionMetadata>,
-    
+
     /// Event callbacks
-    callbacks: Vec<Box<dyn Fn(SelectionEvent<T>) + Send + Sync>>,
+    callbacks: Vec<Box<dyn Fn(SelectionEvent) + Send + Sync>>,
+
+    /// Phantom data for type parameter T
+    _phantom: std::marker::PhantomData<T>,
+}
+
+impl<T: ListItem> std::fmt::Debug for SelectionManager<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SelectionManager")
+            .field("mode", &self.mode)
+            .field("selected_items", &self.selected_items)
+            .field("primary_selection", &self.primary_selection)
+            .field("history_position", &self.history_position)
+            .field("config", &self.config)
+            .field("callbacks", &format!("[{} callbacks]", self.callbacks.len()))
+            .finish()
+    }
 }
 
 /// Selection modes
@@ -162,7 +176,7 @@ struct SelectionMetadata {
 
 /// Selection events
 #[derive(Debug, Clone)]
-pub enum SelectionEvent<T: ListItem> {
+pub enum SelectionEvent {
     /// Selection changed
     SelectionChanged {
         selected: Vec<String>,
@@ -222,6 +236,7 @@ impl<T: ListItem> SelectionManager<T> {
             config,
             metadata: HashMap::new(),
             callbacks: Vec::new(),
+            _phantom: std::marker::PhantomData,
         }
     }
     
@@ -261,7 +276,7 @@ impl<T: ListItem> SelectionManager<T> {
     /// Add an event callback
     pub fn add_callback<F>(&mut self, callback: F)
     where
-        F: Fn(SelectionEvent<T>) + Send + Sync + 'static,
+        F: Fn(SelectionEvent) + Send + Sync + 'static,
     {
         self.callbacks.push(Box::new(callback));
     }
@@ -302,7 +317,8 @@ impl<T: ListItem> SelectionManager<T> {
             }
             SelectionMode::None => return Ok(false),
         }
-        
+
+        self.save_selection_state(format!("Select item {}", item_id));
         Ok(true)
     }
     
@@ -600,27 +616,29 @@ impl<T: ListItem> SelectionManager<T> {
     
     /// Undo last selection change
     pub fn undo(&mut self) -> Result<bool> {
-        if !self.config.enable_history || self.history_position >= self.selection_history.len() {
+        if !self.config.enable_history || self.history_position + 1 >= self.selection_history.len() {
             return Ok(false);
         }
-        
+
         self.history_position += 1;
-        if let Some(snapshot) = self.selection_history.get(self.selection_history.len() - self.history_position) {
+        let index = self.selection_history.len() - 1 - self.history_position;
+        if let Some(snapshot) = self.selection_history.get(index) {
             self.restore_selection_state(snapshot.clone())?;
             Ok(true)
         } else {
             Ok(false)
         }
     }
-    
+
     /// Redo last undone selection change
     pub fn redo(&mut self) -> Result<bool> {
-        if !self.config.enable_history || self.history_position <= 1 {
+        if !self.config.enable_history || self.history_position == 0 {
             return Ok(false);
         }
-        
+
         self.history_position -= 1;
-        if let Some(snapshot) = self.selection_history.get(self.selection_history.len() - self.history_position) {
+        let index = self.selection_history.len() - 1 - self.history_position;
+        if let Some(snapshot) = self.selection_history.get(index) {
             self.restore_selection_state(snapshot.clone())?;
             Ok(true)
         } else {
@@ -741,7 +759,7 @@ impl<T: ListItem> SelectionManager<T> {
     }
     
     /// Emit an event to all callbacks
-    fn emit_event(&self, event: SelectionEvent<T>) {
+    fn emit_event(&self, event: SelectionEvent) {
         for callback in &self.callbacks {
             callback(event.clone());
         }
@@ -848,7 +866,7 @@ mod tests {
     
     #[test]
     fn test_single_selection() {
-        let mut manager = SelectionManager::new(SelectionMode::Single);
+        let mut manager: SelectionManager<SimpleListItem> = SelectionManager::new(SelectionMode::Single);
         
         manager.select_item("1", true).unwrap();
         assert_eq!(manager.selection_count(), 1);
@@ -864,7 +882,7 @@ mod tests {
     
     #[test]
     fn test_multi_selection() {
-        let mut manager = SelectionManager::new(SelectionMode::Multiple);
+        let mut manager: SelectionManager<SimpleListItem> = SelectionManager::new(SelectionMode::Multiple);
         
         manager.select_item("1", true).unwrap();
         manager.select_item("2", false).unwrap();
@@ -919,7 +937,7 @@ mod tests {
     
     #[test]
     fn test_toggle_selection() {
-        let mut manager = SelectionManager::new(SelectionMode::Multiple);
+        let mut manager: SelectionManager<SimpleListItem> = SelectionManager::new(SelectionMode::Multiple);
         
         // Toggle on
         manager.toggle_item("1", true).unwrap();
@@ -932,7 +950,7 @@ mod tests {
     
     #[test]
     fn test_selection_history() {
-        let mut manager = SelectionManager::with_config(
+        let mut manager: SelectionManager<SimpleListItem> = SelectionManager::with_config(
             SelectionMode::Multiple,
             SelectionConfig::default(),
         );
@@ -959,7 +977,7 @@ mod tests {
     fn test_selection_limit() {
         let mut config = SelectionConfig::default();
         config.max_selected = Some(2);
-        let mut manager = SelectionManager::with_config(SelectionMode::Multiple, config);
+        let mut manager: SelectionManager<SimpleListItem> = SelectionManager::with_config(SelectionMode::Multiple, config);
         
         manager.select_item("1", true).unwrap();
         manager.select_item("2", false).unwrap();

@@ -17,43 +17,43 @@ pub mod colors;
 pub mod presets;
 
 /// Theme represents a complete visual style configuration
-/// 
+///
 /// This structure closely mirrors the Crush theme implementation,
 /// providing comprehensive color definitions and semantic naming.
 #[derive(Debug, Clone)]
 pub struct Theme {
     pub name: String,
     pub is_dark: bool,
-    
+
     // Primary brand colors
     pub primary: Color,
-    pub secondary: Color, 
+    pub secondary: Color,
     pub tertiary: Color,
     pub accent: Color,
-    
+
     // Background colors with semantic naming
     pub bg_base: Color,
     pub bg_base_lighter: Color,
     pub bg_subtle: Color,
     pub bg_overlay: Color,
-    
+
     // Foreground colors for text and UI elements
     pub fg_base: Color,
     pub fg_muted: Color,
     pub fg_half_muted: Color,
     pub fg_subtle: Color,
     pub fg_selected: Color,
-    
+
     // Border colors
     pub border: Color,
     pub border_focus: Color,
-    
+
     // Status and semantic colors
     pub success: Color,
     pub error: Color,
     pub warning: Color,
     pub info: Color,
-    
+
     // Extended color palette
     pub white: Color,
     pub blue_light: Color,
@@ -66,9 +66,171 @@ pub struct Theme {
     pub red_dark: Color,
     pub red_light: Color,
     pub cherry: Color,
-    
-    // Cached styles - built lazily
-    styles: Option<Styles>,
+
+    // Semantic aliases used by components
+    pub text: Color,
+    pub text_dim: Color,
+
+    // Semantic alias fields for component access patterns
+    pub fg_primary: Color,
+    pub bg_surface: Color,
+    pub bg_primary: Color,
+    pub fg_secondary: Color,
+    pub accent_primary: Color,
+    pub accent_secondary: Color,
+    pub accent_tertiary: Color,
+    pub border_primary: Color,
+    pub info_primary: Color,
+    pub placeholder: Color,
+
+    // Icon set for UI elements
+    pub icons: IconSet,
+
+    // Color accessor struct for `theme.colors.X` pattern
+    pub colors: ThemeColors,
+
+    // Pre-built styles for components
+    pub styles: Styles,
+}
+
+/// Color accessor struct that mirrors Theme color fields.
+/// Allows components to use `theme.colors.primary`, `theme.colors.bg_base`, etc.
+#[derive(Debug, Clone)]
+pub struct ThemeColors {
+    pub primary: Color,
+    pub secondary: Color,
+    pub tertiary: Color,
+    pub accent: Color,
+    pub bg_base: Color,
+    pub bg_base_lighter: Color,
+    pub bg_subtle: Color,
+    pub bg_overlay: Color,
+    pub fg_base: Color,
+    pub fg_muted: Color,
+    pub fg_half_muted: Color,
+    pub fg_subtle: Color,
+    pub fg_selected: Color,
+    pub border: Color,
+    pub border_focus: Color,
+    pub success: Color,
+    pub error: Color,
+    pub warning: Color,
+    pub info: Color,
+    pub white: Color,
+    pub blue_light: Color,
+    pub blue: Color,
+    pub yellow: Color,
+    pub green: Color,
+    pub green_dark: Color,
+    pub green_light: Color,
+    pub red: Color,
+    pub red_dark: Color,
+    pub red_light: Color,
+    pub cherry: Color,
+    pub text: Color,
+    pub text_dim: Color,
+    // Semantic aliases
+    pub muted: Color,
+    pub subtle: Color,
+    pub selected: Color,
+    pub selection: Color,
+    pub background: Color,
+    pub base: Color,
+    pub overlay: Color,
+}
+
+impl ThemeColors {
+    /// Build ThemeColors from a Theme
+    pub fn from_theme(theme: &Theme) -> Self {
+        Self {
+            primary: theme.primary,
+            secondary: theme.secondary,
+            tertiary: theme.tertiary,
+            accent: theme.accent,
+            bg_base: theme.bg_base,
+            bg_base_lighter: theme.bg_base_lighter,
+            bg_subtle: theme.bg_subtle,
+            bg_overlay: theme.bg_overlay,
+            fg_base: theme.fg_base,
+            fg_muted: theme.fg_muted,
+            fg_half_muted: theme.fg_half_muted,
+            fg_subtle: theme.fg_subtle,
+            fg_selected: theme.fg_selected,
+            border: theme.border,
+            border_focus: theme.border_focus,
+            success: theme.success,
+            error: theme.error,
+            warning: theme.warning,
+            info: theme.info,
+            white: theme.white,
+            blue_light: theme.blue_light,
+            blue: theme.blue,
+            yellow: theme.yellow,
+            green: theme.green,
+            green_dark: theme.green_dark,
+            green_light: theme.green_light,
+            red: theme.red,
+            red_dark: theme.red_dark,
+            red_light: theme.red_light,
+            cherry: theme.cherry,
+            text: theme.fg_base,
+            text_dim: theme.fg_subtle,
+            // Semantic aliases
+            muted: theme.fg_muted,
+            subtle: theme.fg_subtle,
+            selected: theme.fg_selected,
+            selection: theme.fg_selected,
+            background: theme.bg_base,
+            base: theme.fg_base,
+            overlay: theme.bg_overlay,
+        }
+    }
+}
+
+impl Default for ThemeColors {
+    fn default() -> Self {
+        Self {
+            primary: Color::Cyan,
+            secondary: Color::Yellow,
+            tertiary: Color::Green,
+            accent: Color::Magenta,
+            bg_base: Color::Black,
+            bg_base_lighter: Color::DarkGray,
+            bg_subtle: Color::DarkGray,
+            bg_overlay: Color::DarkGray,
+            fg_base: Color::White,
+            fg_muted: Color::Gray,
+            fg_half_muted: Color::Gray,
+            fg_subtle: Color::DarkGray,
+            fg_selected: Color::Black,
+            border: Color::DarkGray,
+            border_focus: Color::Cyan,
+            success: Color::Green,
+            error: Color::Red,
+            warning: Color::Yellow,
+            info: Color::Blue,
+            white: Color::White,
+            blue_light: Color::LightBlue,
+            blue: Color::Blue,
+            yellow: Color::Yellow,
+            green: Color::Green,
+            green_dark: Color::Green,
+            green_light: Color::LightGreen,
+            red: Color::Red,
+            red_dark: Color::Red,
+            red_light: Color::LightRed,
+            cherry: Color::Magenta,
+            text: Color::White,
+            text_dim: Color::DarkGray,
+            muted: Color::Gray,
+            subtle: Color::DarkGray,
+            selected: Color::Black,
+            selection: Color::Black,
+            background: Color::Black,
+            base: Color::White,
+            overlay: Color::DarkGray,
+        }
+    }
 }
 
 /// Pre-built styles for UI components
@@ -153,6 +315,66 @@ pub struct Styles {
     pub chat_timestamp: Style,
 }
 
+impl Default for Styles {
+    fn default() -> Self {
+        let base = Style::default();
+        Self {
+            base,
+            selected_base: base,
+            title: base,
+            subtitle: base,
+            text: base,
+            text_selected: base,
+            muted: base,
+            subtle: base,
+            success: base,
+            error: base,
+            warning: base,
+            info: base,
+            text_input_focused: base,
+            text_input_blurred: base,
+            text_input_placeholder: base,
+            text_input_prompt: base,
+            text_input_cursor: base,
+            text_area_focused: base,
+            text_area_blurred: base,
+            text_area_line_number: base,
+            text_area_cursor_line: base,
+            help_short_key: base,
+            help_short_desc: base,
+            help_short_separator: base,
+            help_ellipsis: base,
+            help_full_key: base,
+            help_full_desc: base,
+            help_full_separator: base,
+            dialog_border: base,
+            dialog_title: base,
+            dialog_content: base,
+            list_item: base,
+            list_item_selected: base,
+            list_item_focused: base,
+            file_picker_cursor: base,
+            file_picker_directory: base,
+            file_picker_file: base,
+            file_picker_symlink: base,
+            file_picker_selected: base,
+            file_picker_disabled: base,
+            file_picker_permission: base,
+            file_picker_size: base,
+            diff_equal_line: base,
+            diff_insert_line: base,
+            diff_delete_line: base,
+            diff_divider_line: base,
+            diff_line_number: base,
+            chat_user_message: base,
+            chat_assistant_message: base,
+            chat_system_message: base,
+            chat_tool_message: base,
+            chat_timestamp: base,
+        }
+    }
+}
+
 /// Markdown styling configuration
 /// 
 /// This structure provides styling for markdown rendering,
@@ -228,6 +450,39 @@ pub struct IconSet {
     pub checkmark: String,
 }
 
+impl Default for IconSet {
+    fn default() -> Self {
+        Self {
+            folder_open: "\u{1F4C2}".to_string(),
+            folder_closed: "\u{1F4C1}".to_string(),
+            file: "\u{1F4C4}".to_string(),
+            session: "\u{1F4AC}".to_string(),
+            user: "\u{1F464}".to_string(),
+            assistant: "\u{1F916}".to_string(),
+            system: "\u{2699}".to_string(),
+            tool: "\u{1F527}".to_string(),
+            attachment: "\u{1F4CE}".to_string(),
+            success: "\u{2705}".to_string(),
+            error: "\u{274C}".to_string(),
+            warning: "\u{26A0}".to_string(),
+            info: "\u{2139}".to_string(),
+            loading: "\u{23F3}".to_string(),
+            copy: "\u{1F4CB}".to_string(),
+            edit: "\u{270F}".to_string(),
+            delete: "\u{1F5D1}".to_string(),
+            search: "\u{1F50D}".to_string(),
+            settings: "\u{2699}".to_string(),
+            help: "\u{2753}".to_string(),
+            arrow_right: "\u{25B6}".to_string(),
+            arrow_down: "\u{25BC}".to_string(),
+            arrow_up: "\u{25B2}".to_string(),
+            arrow_left: "\u{25C0}".to_string(),
+            bullet: "\u{2022}".to_string(),
+            checkmark: "\u{2713}".to_string(),
+        }
+    }
+}
+
 /// Animation configuration
 #[derive(Debug, Clone)]
 pub struct AnimationConfig {
@@ -249,20 +504,31 @@ pub enum EasingType {
     Elastic,
 }
 
+impl Default for Theme {
+    fn default() -> Self {
+        presets::goofy_dark()
+    }
+}
+
 impl Theme {
-    /// Get styles, building them if necessary
-    /// 
-    /// This function builds and caches component styles based on the theme colors,
-    /// similar to the Crush theme.buildStyles() method.
-    pub fn styles(&mut self) -> &Styles {
-        if self.styles.is_none() {
-            self.styles = Some(self.build_styles());
-        }
-        self.styles.as_ref().unwrap()
+    /// Get a reference to the pre-built styles
+    pub fn get_styles(&self) -> &Styles {
+        &self.styles
+    }
+
+    // --- Semantic color accessors used by components ---
+
+    pub fn text_muted(&self) -> Color { self.fg_muted }
+    pub fn text_dim_color(&self) -> Color { self.fg_subtle }
+    pub fn surface(&self) -> Color { self.bg_subtle }
+
+    /// Build a ThemeColors struct from this theme's fields
+    pub(crate) fn build_colors(&self) -> ThemeColors {
+        ThemeColors::from_theme(self)
     }
     
     /// Build styles from theme colors
-    fn build_styles(&self) -> Styles {
+    pub(crate) fn build_styles(&self) -> Styles {
         let base = Style::default().fg(self.fg_base);
         
         Styles {
@@ -444,9 +710,9 @@ pub fn set_current_theme(name: &str) -> Result<()> {
         .map_err(|e| anyhow::anyhow!(e))
 }
 
-/// Get styles for the current theme (builds them if necessary)
+/// Get styles for the current theme
 pub fn current_styles() -> &'static Styles {
-    current_theme_mut().styles()
+    &current_theme().styles
 }
 
 

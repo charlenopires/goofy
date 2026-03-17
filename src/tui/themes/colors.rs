@@ -292,15 +292,30 @@ pub mod accessibility {
     
     /// Calculate relative luminance of a color (0.0 - 1.0)
     pub fn luminance(color: Color) -> f32 {
-        match color {
-            Color::Rgb(r, g, b) => {
-                let r = gamma_correct(r as f32 / 255.0);
-                let g = gamma_correct(g as f32 / 255.0);
-                let b = gamma_correct(b as f32 / 255.0);
-                0.2126 * r + 0.7152 * g + 0.0722 * b
-            }
-            _ => 0.5, // Fallback
-        }
+        let (r, g, b) = match color {
+            Color::Rgb(r, g, b) => (r, g, b),
+            Color::White => (255, 255, 255),
+            Color::Black => (0, 0, 0),
+            Color::Red => (255, 0, 0),
+            Color::Green => (0, 128, 0),
+            Color::Yellow => (255, 255, 0),
+            Color::Blue => (0, 0, 255),
+            Color::Magenta => (255, 0, 255),
+            Color::Cyan => (0, 255, 255),
+            Color::Gray => (128, 128, 128),
+            Color::DarkGray => (169, 169, 169),
+            Color::LightRed => (255, 128, 128),
+            Color::LightGreen => (144, 238, 144),
+            Color::LightYellow => (255, 255, 224),
+            Color::LightBlue => (173, 216, 230),
+            Color::LightMagenta => (255, 128, 255),
+            Color::LightCyan => (224, 255, 255),
+            _ => return 0.5, // Fallback for indexed colors
+        };
+        let r = gamma_correct(r as f32 / 255.0);
+        let g = gamma_correct(g as f32 / 255.0);
+        let b = gamma_correct(b as f32 / 255.0);
+        0.2126 * r + 0.7152 * g + 0.0722 * b
     }
     
     /// Gamma correction for luminance calculation

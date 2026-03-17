@@ -3,21 +3,20 @@
 //! This module provides a virtual list component that only renders visible items,
 //! enabling smooth performance with lists containing hundreds of thousands of items.
 
-use super::{Direction, ListConfig, ListEvent, ListItem, ListMetrics, ListOperation};
+use super::{Direction, ListConfig, ListEvent, ListItem, ListMetrics};
 use crate::tui::themes::Theme;
 use anyhow::Result;
 use crossterm::event::{KeyCode, KeyEvent, MouseEvent, MouseEventKind};
 use ratatui::{
     layout::Rect,
-    style::{Color, Modifier, Style},
+    style::Modifier,
     text::{Line, Span},
-    widgets::{Block, Borders},
 };
 use std::collections::HashMap;
+use std::fmt;
 use std::time::{Duration, Instant};
 
 /// Virtual list component that efficiently handles large datasets
-#[derive(Debug)]
 pub struct VirtualList<T: ListItem> {
     /// Configuration settings
     config: ListConfig,
@@ -54,6 +53,23 @@ pub struct VirtualList<T: ListItem> {
     
     /// Animation state for smooth scrolling
     scroll_animation: Option<ScrollAnimation>,
+}
+
+impl<T: ListItem> fmt::Debug for VirtualList<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("VirtualList")
+            .field("config", &self.config)
+            .field("items_count", &self.items.len())
+            .field("selected_id", &self.selected_id)
+            .field("scroll_offset", &self.scroll_offset)
+            .field("area", &self.area)
+            .field("direction", &self.direction)
+            .field("focused", &self.focused)
+            .field("virtual_state", &self.virtual_state)
+            .field("metrics", &self.metrics)
+            .field("event_listeners", &format!("[{} listeners]", self.event_listeners.len()))
+            .finish()
+    }
 }
 
 /// Cached rendered item
@@ -379,15 +395,6 @@ impl<T: ListItem> VirtualList<T> {
                 }
                 Ok(true)
             }
-            MouseEventKind::DoubleClick(_) => {
-                if let Some(selected) = self.selected_item().cloned() {
-                    self.emit_event(ListEvent::ItemActivated {
-                        item_id: selected.id(),
-                        item: selected,
-                    });
-                }
-                Ok(true)
-            }
             _ => Ok(false),
         }
     }
@@ -439,39 +446,47 @@ impl<T: ListItem> VirtualList<T> {
         
         let mut lines = Vec::new();
         let viewport_height = self.area.height as usize;
-        
+
         // Render visible items
         let visible_range = self.get_visible_item_range();
-        
-        for index in visible_range.start..=visible_range.end.min(self.items.len().saturating_sub(1)) {
-            let item = &self.items[index];
-            let is_selected = self.selected_id.as_ref() == Some(&item.id());
-            
-            let rendered_item = self.get_or_render_item(item, is_selected, theme)?;
-            
+        let range_start = visible_range.start;
+        let range_end = visible_range.end;
+
+        // Collect item data needed for rendering to avoid borrow conflicts
+        let items_to_render: Vec<(usize, T, bool)> = (range_start..=range_end.min(self.items.len().saturating_sub(1)))
+            .map(|index| {
+                let item = self.items[index].clone();
+                let is_selected = self.selected_id.as_ref() == Some(&item.id());
+                (index, item, is_selected)
+            })
+            .collect();
+
+        for (index, item, is_selected) in &items_to_render {
+            let rendered_lines = self.render_item_lines(item, *is_selected, theme);
+
             // Add gap if configured
-            if index > visible_range.start && self.config.item_gap > 0 {
+            if *index > range_start && self.config.item_gap > 0 {
                 for _ in 0..self.config.item_gap {
                     lines.push(Line::from(""));
                 }
             }
-            
-            lines.extend(rendered_item.lines);
-            
+
+            lines.extend(rendered_lines);
+
             // Stop if we've filled the viewport
             if lines.len() >= viewport_height {
                 lines.truncate(viewport_height);
                 break;
             }
         }
-        
+
         // Fill remaining space if needed
         while lines.len() < viewport_height {
             lines.push(Line::from(""));
         }
-        
+
         // Update metrics
-        self.metrics.rendered_items = visible_range.end.saturating_sub(visible_range.start) + 1;
+        self.metrics.rendered_items = range_end.saturating_sub(range_start) + 1;
         self.metrics.total_items = self.items.len();
         self.metrics.visible_items = self.metrics.rendered_items;
         self.metrics.scroll_offset = self.scroll_offset;
@@ -488,31 +503,21 @@ impl<T: ListItem> VirtualList<T> {
         start..end.saturating_add(1)
     }
     
-    /// Get or render an item from cache
-    fn get_or_render_item(&mut self, item: &T, is_selected: bool, theme: &Theme) -> Result<&RenderedItem> {
-        let cache_key = format!("{}_{}", item.id(), is_selected);
-        
-        // Check if we have a valid cached version
-        if let Some(cached) = self.rendered_cache.get(&cache_key) {
-            if cached.last_rendered.elapsed() < Duration::from_secs(1) {
-                return Ok(cached);
-            }
-        }
-        
-        // Render the item
-        let mut content_lines = item.content();
+    /// Render an item to styled lines
+    fn render_item_lines(&self, item: &T, is_selected: bool, theme: &Theme) -> Vec<Line<'static>> {
+        let content_lines = item.content();
         let mut rendered_lines = Vec::new();
-        
+
         for line in content_lines {
             let mut styled_line = line;
-            
+
             // Apply selection styling
             if is_selected {
                 let spans: Vec<Span> = styled_line.spans.into_iter()
                     .map(|span| {
                         let mut style = span.style;
                         style = style.bg(theme.colors.selection);
-                        if !style.fg.is_some() {
+                        if style.fg.is_none() {
                             style = style.fg(theme.colors.text);
                         }
                         style = style.add_modifier(Modifier::BOLD);
@@ -521,7 +526,7 @@ impl<T: ListItem> VirtualList<T> {
                     .collect();
                 styled_line = Line::from(spans);
             }
-            
+
             // Apply item-specific styling
             if let Some(item_style) = item.style() {
                 let spans: Vec<Span> = styled_line.spans.into_iter()
@@ -540,19 +545,11 @@ impl<T: ListItem> VirtualList<T> {
                     .collect();
                 styled_line = Line::from(spans);
             }
-            
+
             rendered_lines.push(styled_line);
         }
-        
-        let rendered_item = RenderedItem {
-            id: item.id(),
-            lines: rendered_lines,
-            height: item.height(),
-            last_rendered: Instant::now(),
-        };
-        
-        self.rendered_cache.insert(cache_key.clone(), rendered_item);
-        Ok(self.rendered_cache.get(&cache_key).unwrap())
+
+        rendered_lines
     }
     
     /// Recalculate virtual scrolling state
@@ -744,21 +741,22 @@ impl<T: ListItem> VirtualList<T> {
         
         let mut current_height = 0;
         let visible_range = self.get_visible_item_range();
-        
+        let range_start = visible_range.start;
+
         for index in visible_range {
             if index >= self.items.len() {
                 break;
             }
-            
+
             let item = &self.items[index];
             let item_height = item.height() as usize;
-            
+
             if local_row >= current_height && local_row < current_height + item_height {
                 return Some(item.id());
             }
-            
+
             current_height += item_height;
-            if index > visible_range.start && self.config.item_gap > 0 {
+            if index > range_start && self.config.item_gap > 0 {
                 current_height += self.config.item_gap as usize;
             }
         }

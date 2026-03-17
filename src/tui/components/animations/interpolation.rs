@@ -457,7 +457,10 @@ where
     }
 }
 
-impl<T> Default for KeyframeSequence<T> {
+impl<T> Default for KeyframeSequence<T>
+where
+    T: Interpolatable + Clone,
+{
     fn default() -> Self {
         Self::new()
     }

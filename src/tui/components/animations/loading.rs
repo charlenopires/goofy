@@ -160,8 +160,9 @@ impl LoadingConfig {
 
     pub fn network_request() -> Self {
         Self::new(LoadingState::Hybrid)
-            .with_spinner(SpinnerConfig::new(SpinnerStyle::Circle)
-                .with_label("Connecting".to_string()))
+            .with_spinner(SpinnerConfig::new()
+                .style(SpinnerStyle::Dots)
+                .message("Connecting"))
             .with_progress(ProgressConfig::new(ProgressStyle::Bar)
                 .with_width(15)
                 .show_percentage(false))

@@ -163,15 +163,15 @@ impl FileProvider {
             }
 
             let display_name = if file_info.is_dir {
-                format!("{}/", filename)
+                format!("{}/", &filename)
             } else {
                 filename.clone()
             };
 
             let completion_value = if dir_path == Path::new(".") {
-                filename
+                filename.clone()
             } else {
-                format!("{}{}", dir_path.to_string_lossy(), filename)
+                format!("{}{}", dir_path.to_string_lossy(), &filename)
             };
 
             let description = if file_info.is_dir {
@@ -207,7 +207,7 @@ impl FileProvider {
 
     /// Calculate relevance score for a file
     fn calculate_file_score(&self, filename: &str, prefix: &str, file_info: &FileInfo) -> f64 {
-        let mut score = 1.0;
+        let mut score: f64 = 1.0;
 
         // Exact prefix match gets higher score
         if filename.to_lowercase().starts_with(&prefix.to_lowercase()) {
@@ -249,7 +249,7 @@ impl FileProvider {
             score -= 0.2;
         }
 
-        score.max(0.1) // Minimum score
+        score.max(0.1_f64) // Minimum score
     }
 
     /// Complete environment variables (for paths starting with $)
@@ -323,14 +323,20 @@ impl CompletionProvider for FileProvider {
     }
 
     fn is_applicable(&self, context: &CompletionContext) -> bool {
-        let current_word = context.current_word();
-        
+        // Check the text before cursor for path indicators
+        let text_before = &context.text[..context.cursor_pos];
+        // Find the current token (after last whitespace)
+        let token_start = text_before.rfind(char::is_whitespace)
+            .map(|i| i + 1)
+            .unwrap_or(0);
+        let current_token = &text_before[token_start..];
+
         // Apply to file paths or environment variables
-        current_word.contains('/') || 
-        current_word.contains('\\') || 
-        current_word.starts_with('.') ||
-        current_word.starts_with('$') ||
-        current_word.starts_with('~')
+        current_token.contains('/') ||
+        current_token.contains('\\') ||
+        current_token.starts_with('.') ||
+        current_token.starts_with('$') ||
+        current_token.starts_with('~')
     }
 
     fn get_priority(&self, context: &CompletionContext) -> i32 {
@@ -352,28 +358,28 @@ mod tests {
     async fn test_file_provider_basic() {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = temp_dir.path();
-        
+
         // Create test files
         fs::write(temp_path.join("test1.rs"), "// Test file 1").unwrap();
         fs::write(temp_path.join("test2.py"), "# Test file 2").unwrap();
-        fs::create_dir(temp_path.join("subdir")).unwrap();
-        
+        fs::create_dir(temp_path.join("testdir")).unwrap();
+
         let provider = FileProvider::new()
             .with_working_directory(temp_path.to_path_buf());
-        
+
         let context = CompletionContext {
             text: "test".to_string(),
             cursor_pos: 4,
             working_dir: Some(temp_path.to_string_lossy().to_string()),
             ..Default::default()
         };
-        
+
         let completions = provider.get_completions(&context).await.unwrap();
-        
+
         assert!(!completions.is_empty());
         assert!(completions.iter().any(|c| c.title.contains("test1.rs")));
         assert!(completions.iter().any(|c| c.title.contains("test2.py")));
-        assert!(completions.iter().any(|c| c.title.contains("subdir")));
+        assert!(completions.iter().any(|c| c.title.contains("testdir")));
     }
 
     #[tokio::test]
@@ -383,7 +389,7 @@ mod tests {
         // Test various path formats
         let (dir, prefix) = provider.parse_path_context("src/main.rs", 8);
         assert_eq!(dir, PathBuf::from("src/"));
-        assert_eq!(prefix, "main.rs");
+        assert_eq!(prefix, "main"); // cursor at pos 8 gives "src/main"
         
         let (dir, prefix) = provider.parse_path_context("./config", 8);
         assert_eq!(dir, PathBuf::from("./"));

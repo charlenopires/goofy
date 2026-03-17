@@ -209,23 +209,24 @@ impl MarkdownWidget {
     }
     
     /// Render markdown content to Text
-    pub fn render(&mut self, area: Rect) -> Result<Text<'static>> {
+    pub fn render_to_text(&mut self, area: Rect) -> Result<Text<'static>> {
         if !self.cache_dirty && self.cached_content.is_some() {
             return Ok(self.cached_content.as_ref().unwrap().clone());
         }
-        
+
+        let default_theme = Theme::default();
         let theme = self.theme.as_ref()
-            .unwrap_or_else(|| &Theme::default());
-        
+            .unwrap_or(&default_theme);
+
         let styles = MarkdownStyles::from_theme(theme);
         let renderer = MarkdownRenderer::new(&self.config, styles);
-        
+
         let text = renderer.render(&self.content, area.width)?;
-        
+
         // Cache the result
         self.cached_content = Some(text.clone());
         self.cache_dirty = false;
-        
+
         Ok(text)
     }
     
@@ -255,7 +256,7 @@ impl Widget for MarkdownWidget {
         } else {
             None
         };
-        
+
         // Calculate the inner area
         let inner_area = if let Some(ref block) = block {
             let outer_area = area;
@@ -264,12 +265,12 @@ impl Widget for MarkdownWidget {
         } else {
             area
         };
-        
+
         // Render the markdown content
-        if let Ok(text) = self.render(inner_area) {
+        if let Ok(text) = self.render_to_text(inner_area) {
             let paragraph = Paragraph::new(text)
                 .wrap(Wrap { trim: true });
-            
+
             paragraph.render(inner_area, buf);
         }
     }
@@ -283,17 +284,30 @@ pub mod utils {
     pub fn extract_text(markdown: &str) -> String {
         let parser = Parser::new(markdown);
         let mut text = String::new();
-        
+
         for event in parser {
             match event {
-                Event::Text(content) => text.push_str(&content),
+                Event::Text(content) => {
+                    // Avoid double spaces when appending text after an End tag
+                    if text.ends_with(' ') && content.starts_with(' ') {
+                        text.push_str(content.trim_start());
+                    } else {
+                        text.push_str(&content);
+                    }
+                }
                 Event::Code(content) => text.push_str(&content),
                 Event::SoftBreak | Event::HardBreak => text.push(' '),
+                Event::End(_) => {
+                    // Add a space after block-level elements to separate content
+                    if !text.is_empty() && !text.ends_with(' ') {
+                        text.push(' ');
+                    }
+                }
                 _ => {}
             }
         }
-        
-        text
+
+        text.trim().to_string()
     }
     
     /// Count lines in markdown content

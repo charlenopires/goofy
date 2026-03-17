@@ -4,6 +4,7 @@
 //! validation, and access control for file operations in the TUI.
 
 use anyhow::Result;
+use std::io::Write;
 use std::path::Path;
 
 #[cfg(unix)]

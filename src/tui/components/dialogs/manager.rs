@@ -262,12 +262,9 @@ impl DialogManager {
     }
     
     /// Get the currently focused dialog (mutable)
-    pub fn focused_dialog_mut(&mut self) -> Option<&mut dyn Dialog> {
-        if let Some(idx) = self.focused_index {
-            self.dialogs.get_mut(idx).map(|dialog| &mut **dialog)
-        } else {
-            None
-        }
+    pub fn focused_dialog_mut(&mut self) -> Option<&mut (dyn Dialog + '_)> {
+        let idx = self.focused_index?;
+        self.dialogs.get_mut(idx).map(|dialog| &mut **dialog as &mut dyn Dialog)
     }
     
     /// Get dialog by ID
@@ -278,12 +275,9 @@ impl DialogManager {
     }
     
     /// Get dialog by ID (mutable)
-    pub fn get_dialog_mut(&mut self, dialog_id: &DialogId) -> Option<&mut dyn Dialog> {
-        if let Some(&idx) = self.id_map.get(dialog_id) {
-            self.dialogs.get_mut(idx).map(|dialog| &mut **dialog)
-        } else {
-            None
-        }
+    pub fn get_dialog_mut(&mut self, dialog_id: &DialogId) -> Option<&mut (dyn Dialog + '_)> {
+        let &idx = self.id_map.get(dialog_id)?;
+        self.dialogs.get_mut(idx).map(|dialog| &mut **dialog as &mut dyn Dialog)
     }
     
     /// Check if any dialogs are open
